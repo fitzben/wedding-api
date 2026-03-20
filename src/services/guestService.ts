@@ -1,0 +1,220 @@
+import type { Env } from "../index";
+import { Guest } from "../routes/Guests/type";
+import { generateSlug } from "../utils/slug";
+
+export async function getGuests(env: Env): Promise<Guest[]> {
+  const { results } = await env.DB.prepare(
+    "SELECT * FROM guests WHERE deleted_at IS NULL ORDER BY created_at DESC",
+  ).all<Guest>();
+  return results;
+}
+
+export async function getGuestsPaginated(
+  env: Env,
+  page: number,
+  limit: number,
+  search: string = "",
+  show_deleted: boolean = false,
+  filters: {
+    category?: string;
+    priority?: string;
+    importance?: string;
+    guest_group_id?: string;
+    invitation_type?: string;
+  } = {}
+): Promise<{ data: Guest[]; total: number; page: number }> {
+  const offset = (page - 1) * limit;
+
+  // Build the WHERE clause dynamically
+  let whereClause = show_deleted ? "WHERE 1=1" : "WHERE deleted_at IS NULL";
+  const bindParams: any[] = [];
+
+  if (search) {
+    whereClause += " AND (display_name LIKE ? OR phone_number LIKE ?)";
+    bindParams.push(`%${search}%`, `%${search}%`);
+  }
+
+  if (filters.category) {
+    whereClause += " AND category = ?";
+    bindParams.push(filters.category);
+  }
+  if (filters.priority) {
+    whereClause += " AND priority = ?";
+    bindParams.push(filters.priority);
+  }
+  if (filters.importance) {
+    whereClause += " AND importance = ?";
+    bindParams.push(filters.importance);
+  }
+  if (filters.guest_group_id) {
+    whereClause += " AND guest_group_id = ?";
+    bindParams.push(filters.guest_group_id);
+  }
+  if (filters.invitation_type) {
+    whereClause += " AND invitation_type = ?";
+    bindParams.push(filters.invitation_type);
+  }
+
+  // Count total
+  const totalResult = await env.DB.prepare(
+    `SELECT COUNT(*) as total FROM guests ${whereClause}`,
+  )
+    .bind(...bindParams)
+    .first<{ total: number }>();
+
+  const total = totalResult?.total ?? 0;
+
+  // Fetch paginated data
+  const { results } = await env.DB.prepare(
+    `SELECT * FROM guests ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+  )
+    .bind(...bindParams, limit, offset)
+    .all<Guest>();
+
+  return {
+    data: results,
+    total,
+    page,
+  };
+}
+
+type CreateGuestInput = {
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  category?: string;
+  pax_allowed?: number;
+  notes?: string | null;
+  priority?: string;
+  importance?: string;
+  guest_group_id?: string | null;
+  invitation_type?: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+};
+
+async function ensureUniqueSlug(db: D1Database, slug: string): Promise<string> {
+  const result = await db
+    .prepare("SELECT id FROM guests WHERE slug = ? LIMIT 1")
+    .bind(slug)
+    .first();
+  if (!result) return slug;
+
+  const random4 = Math.floor(1000 + Math.random() * 9000).toString();
+  const newSlug = `${slug}-${random4}`;
+  return ensureUniqueSlug(db, newSlug);
+}
+
+export async function createGuest(
+  env: Env,
+  input: CreateGuestInput,
+): Promise<Guest> {
+  const {
+    first_name, last_name, phone_number,
+    category = "friend", pax_allowed = 1,
+    priority = "medium", importance = "normal",
+    notes = null, guest_group_id = null, invitation_type = "digital",
+    created_by = null, updated_by = null
+  } = input;
+
+  const id = crypto.randomUUID();
+  const created_at = new Date().toISOString();
+  const display_name = `${first_name} ${last_name}`.trim();
+
+  const baseSlug = generateSlug(display_name);
+  const slug = await ensureUniqueSlug(env.DB, baseSlug);
+
+  const invite_status = "invited";
+  const rsvp_status = "pending";
+
+  await env.DB.prepare(
+    `INSERT INTO guests (
+      id, first_name, last_name, phone_number, display_name, slug, 
+      category, priority, importance, pax_allowed, invite_status, rsvp_status, 
+      notes, guest_group_id, invitation_type, created_by, updated_by, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      id, first_name, last_name, phone_number, display_name, slug,
+      category, priority, importance, pax_allowed, invite_status, rsvp_status,
+      notes, guest_group_id, invitation_type, created_by, updated_by, created_at
+    )
+    .run();
+
+  const result = await env.DB.prepare("SELECT * FROM guests WHERE id = ?").bind(id).first<Guest>();
+  return result!;
+}
+
+export async function deleteGuest(env: Env, id: string, userId: string): Promise<boolean> {
+  const now = new Date().toISOString();
+  const info = await env.DB.prepare(
+    "UPDATE guests SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+  )
+    .bind(now, userId, id)
+    .run();
+  return (info.meta.changes ?? 0) > 0;
+}
+
+export async function editGuest(
+  env: Env,
+  id: string,
+  updates: Partial<Guest>,
+): Promise<Guest | null> {
+  const allowedFields = [
+    "first_name", "last_name", "display_name", "phone_number",
+    "category", "priority", "importance", "pax_allowed",
+    "invite_status", "rsvp_status", "notes", "guest_group_id",
+    "invitation_type", "updated_by"
+  ];
+
+  const updated_at = new Date().toISOString();
+  const keys = Object.keys(updates).filter((k) => allowedFields.includes(k));
+
+  if (keys.length === 0 && !updates.updated_at) {
+    // Nothing to update
+  }
+
+  const fields = [...keys, "updated_at"];
+  const setClause = fields.map((k) => `${k} = ?`).join(", ");
+  const values = [...keys.map((k) => (updates as any)[k]), updated_at];
+
+  await env.DB.prepare(
+    `UPDATE guests SET ${setClause} WHERE id = ? AND deleted_at IS NULL`,
+  )
+    .bind(...values, id)
+    .run();
+
+  const result = await env.DB.prepare(
+    "SELECT * FROM guests WHERE id = ? AND deleted_at IS NULL",
+  )
+    .bind(id)
+    .first<Guest>();
+  return result;
+}
+
+export async function getGuestBySlug(
+  env: Env,
+  slug: string,
+): Promise<Guest | null> {
+  const result = await env.DB.prepare(
+    "SELECT * FROM guests WHERE slug = ? AND deleted_at IS NULL LIMIT 1",
+  )
+    .bind(slug)
+    .first<Guest>();
+
+  if (!result) return null;
+
+  // Add invite_url
+  result.invite_url = `https://benelin.my.id/invite/${slug}`;
+
+  // Update visited_at if NULL
+  if (!result.visited_at) {
+    const now = new Date().toISOString();
+    await env.DB.prepare("UPDATE guests SET visited_at = ? WHERE id = ?")
+      .bind(now, result.id)
+      .run();
+    result.visited_at = now;
+  }
+
+  return result;
+}

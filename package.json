@@ -1,0 +1,27 @@
+{
+	"name": "wedding-api",
+	"version": "0.0.0",
+	"private": true,
+	"scripts": {
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"start": "wrangler dev",
+		"test": "vitest",
+		"cf-typegen": "wrangler types"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.1013.0",
+		"@aws-sdk/s3-request-presigner": "^3.1013.0",
+		"bcryptjs": "^2.4.3",
+		"jose": "^5.9.6",
+		"tslib": "^2.8.1"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.12.4",
+		"@types/bcryptjs": "^2.4.6",
+		"@types/node": "^25.5.0",
+		"typescript": "^5.5.2",
+		"vitest": "~3.2.0",
+		"wrangler": "^4.75.0"
+	}
+}

@@ -1,0 +1,25 @@
+export type Guest = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  display_name: string;
+  slug: string;
+  category: string;
+  priority: string;
+  importance: string;
+  pax_allowed: number;
+  invite_status: string;
+  rsvp_status: string;
+  notes?: string | null;
+  guest_group_id?: string | null;
+  invitation_type?: string;
+  created_by?: string | null;
+  updated_by?: string | null;
+  deleted_by?: string | null;
+  created_at: string;
+  updated_at?: string;
+  deleted_at?: string;
+  visited_at?: string;
+  invite_url?: string;
+};
