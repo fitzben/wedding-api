@@ -43,6 +43,22 @@ export async function handleWishRoutes(
         });
       }
     }
+
+    if (method === "GET") {
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM wishes ORDER BY created_at DESC LIMIT 50"
+        ).all();
+        return new Response(JSON.stringify({ wishes: results }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: "Failed to fetch wishes" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
   }
 
   return new Response(JSON.stringify({ error: "Not Found" }), {

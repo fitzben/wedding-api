@@ -119,5 +119,92 @@ export async function handleGifts(
     }
   }
 
+  // ── GIFT REGISTRY (admin manage) ─────────────────────────────────────────
+
+  if (pathname === "/api/admin/gifts/registry") {
+    if (method === "GET") {
+      try {
+        const rows = await env.DB.prepare(`
+          SELECT r.*,
+            COALESCE((SELECT SUM(c.quantity) FROM gift_registry_claims c WHERE c.registry_id = r.id), 0) AS quantity_claimed
+          FROM gift_registry r
+          WHERE r.deleted_at IS NULL
+          ORDER BY r.sort_order ASC, r.created_at ASC
+        `).all();
+        return json({ items: rows.results });
+      } catch { return jsonError("Failed to fetch registry", 500); }
+    }
+    if (method === "POST") {
+      try {
+        const body = (await req.json()) as any ?? {};
+        const { name, brand, description, image_url, tag, quantity_needed, price_range, shop_url, is_active } = body;
+        if (!name?.trim()) return jsonError("name is required", 400);
+        if (!quantity_needed || parseInt(quantity_needed) < 1) return jsonError("quantity_needed must be >= 1", 400);
+        const id = crypto.randomUUID();
+        const maxOrder = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM gift_registry WHERE deleted_at IS NULL").first() as any;
+        await env.DB.prepare(`
+          INSERT INTO gift_registry (id, name, brand, description, image_url, tag, quantity_needed, price_range, shop_url, sort_order, is_active, created_at, updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+        `).bind(
+          id, name.trim(), brand?.trim()||null, description?.trim()||null,
+          image_url?.trim()||null, tag?.trim()||null,
+          parseInt(quantity_needed)||1, price_range?.trim()||null,
+          shop_url?.trim()||null, maxOrder?.next||0,
+          is_active !== false ? 1 : 0,
+        ).run();
+        return json(await env.DB.prepare("SELECT * FROM gift_registry WHERE id = ?").bind(id).first(), 201);
+      } catch { return jsonError("Failed to create registry item", 500); }
+    }
+  }
+
+  if (pathname === "/api/admin/gifts/registry/reorder" && method === "POST") {
+    try {
+      const { ids } = (await req.json()) as any;
+      if (!Array.isArray(ids)) return jsonError("ids required", 400);
+      const stmts = (ids as string[]).map((id, idx) =>
+        env.DB.prepare("UPDATE gift_registry SET sort_order = ? WHERE id = ?").bind(idx, id)
+      );
+      await env.DB.batch(stmts);
+      return json({ ok: true });
+    } catch { return jsonError("Failed to reorder", 500); }
+  }
+
+  if (pathname.startsWith("/api/admin/gifts/registry/")) {
+    const regId = pathname.split("/").pop();
+    if (!regId) return jsonError("Invalid ID", 400);
+    if (method === "GET") {
+      try {
+        const claims = await env.DB.prepare(
+          "SELECT * FROM gift_registry_claims WHERE registry_id = ? ORDER BY created_at DESC"
+        ).bind(regId).all();
+        return json({ claims: claims.results });
+      } catch { return jsonError("Failed to fetch claims", 500); }
+    }
+    if (method === "PUT") {
+      try {
+        const body = (await req.json()) as any ?? {};
+        const allowed = ["name","brand","description","image_url","tag","quantity_needed","price_range","shop_url","is_active","sort_order"];
+        const fields: string[] = [];
+        const vals: any[] = [];
+        for (const f of allowed) {
+          if (body[f] !== undefined) { fields.push(`${f} = ?`); vals.push(body[f] === "" ? null : body[f]); }
+        }
+        if (!fields.length) return jsonError("No fields to update", 400);
+        fields.push("updated_at = datetime(\'now\')");
+        vals.push(regId);
+        await env.DB.prepare(`UPDATE gift_registry SET ${fields.join(", ")} WHERE id = ? AND deleted_at IS NULL`).bind(...vals).run();
+        return json(await env.DB.prepare("SELECT * FROM gift_registry WHERE id = ?").bind(regId).first());
+      } catch { return jsonError("Failed to update registry item", 500); }
+    }
+    if (method === "DELETE") {
+      try {
+        const res = await env.DB.prepare("UPDATE gift_registry SET deleted_at = datetime(\'now\') WHERE id = ? AND deleted_at IS NULL").bind(regId).run();
+        if (!res.meta.changes) return jsonError("Item not found", 404);
+        return new Response(null, { status: 204 });
+      } catch { return jsonError("Failed to delete registry item", 500); }
+    }
+  }
+
+
   return jsonError("Not Found", 404);
 }
