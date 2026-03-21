@@ -73,23 +73,8 @@ export async function handleGuests(
   }
 
   if (pathname.startsWith("/api/admin/guests/") && pathname !== "/api/admin/guests/bulk-delete") {
-    const id = pathname.split("/")[4]; // guests/{id} or guests/{id}/mark-invited
+    const id = pathname.split("/").pop();
     if (!id) return jsonError("Invalid ID", 400);
-
-    // ── PATCH /:id/mark-invited — toggle invite_status sent/pending ──────────
-    if (pathname.endsWith("/mark-invited") && method === "PATCH") {
-      try {
-        const { status } = (await req.json()) as any ?? {};
-        const validStatuses = ["sent", "pending"];
-        const newStatus = validStatuses.includes(status) ? status : "sent";
-        const res = await env.DB.prepare(
-          "UPDATE guests SET invite_status = ?, updated_at = datetime('now'), updated_by = ? WHERE id = ? AND deleted_at IS NULL"
-        ).bind(newStatus, user.user_id, id).run();
-        if (!res.meta.changes) return jsonError("Guest not found", 404);
-        return json({ id, invite_status: newStatus });
-      } catch { return jsonError("Failed to update invite status", 500); }
-    }
-
     if (method === "PUT") {
       try {
         const body = (await req.json()) as any;
