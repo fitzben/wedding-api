@@ -65,7 +65,7 @@ export async function handleGallery(
       try {
         const { name, key, accepts_video } = (await req.json()) as any ?? {};
         await env.DB.prepare("UPDATE gallery_sections SET name=COALESCE(?,name), key=COALESCE(?,key), accepts_video=COALESCE(?,accepts_video), updated_at=datetime('now') WHERE id=?")
-          .bind(name||null, key||null, accepts_video !== undefined ? (accepts_video ? 1 : 0) : null, sectionId).run();
+          .bind(name || null, key || null, accepts_video !== undefined ? (accepts_video ? 1 : 0) : null, sectionId).run();
         return json(await env.DB.prepare("SELECT * FROM gallery_sections WHERE id = ?").bind(sectionId).first());
       } catch { return jsonError("Failed to update section", 500); }
     }
@@ -85,8 +85,8 @@ export async function handleGallery(
       const { filename, content_type, section_id } = (await req.json()) as any ?? {};
       if (!filename || !content_type || !section_id) return jsonError("filename, content_type, section_id required", 400);
 
-      const ext   = filename.split('.').pop();
-      const key   = `gallery/${section_id}/${crypto.randomUUID()}.${ext}`;
+      const ext = filename.split('.').pop();
+      const key = `gallery/${section_id}/${crypto.randomUUID()}.${ext}`;
 
       const s3Client = new S3Client({
         region: "auto",
@@ -95,6 +95,8 @@ export async function handleGallery(
           accessKeyId: env.R2_ACCESS_KEY_ID,
           secretAccessKey: env.R2_SECRET_ACCESS_KEY,
         },
+        requestChecksumCalculation: "WHEN_REQUIRED",
+        responseChecksumValidation: "WHEN_REQUIRED",
       });
 
       const uploadUrl = await getSignedUrl(
@@ -104,10 +106,17 @@ export async function handleGallery(
           Key: key,
           ContentType: content_type,
         }),
-        { expiresIn: 3600 }
+        {
+          expiresIn: 3600,
+          unhoistableHeaders: new Set([
+            "x-amz-checksum-crc32",
+            "x-amz-sdk-checksum-algorithm",
+          ]),
+        }
       );
 
-      const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
+      const baseUrl = env.R2_PUBLIC_URL?.replace(/\/$/, "") || "https://media.benelin.my.id";
+      const publicUrl = `${baseUrl}/${key}`;
       return json({ upload_url: uploadUrl, public_url: publicUrl, key });
     } catch { return jsonError("Failed to generate upload URL", 500); }
   }
@@ -132,7 +141,7 @@ export async function handleGallery(
         const id = crypto.randomUUID();
         const maxOrder = await env.DB.prepare("SELECT COALESCE(MAX(sort_order),0)+1 as next FROM gallery_media WHERE section_id=?").bind(section_id).first() as any;
         await env.DB.prepare("INSERT INTO gallery_media (id, section_id, key, public_url, filename, content_type, size, media_type, sort_order, created_at) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))")
-          .bind(id, section_id, key, public_url, filename, content_type, size||0, media_type||'image', maxOrder.next).run();
+          .bind(id, section_id, key, public_url, filename, content_type, size || 0, media_type || 'image', maxOrder.next).run();
         return json(await env.DB.prepare("SELECT * FROM gallery_media WHERE id = ?").bind(id).first(), 201);
       } catch { return jsonError("Failed to confirm upload", 500); }
     }
@@ -156,7 +165,7 @@ export async function handleGallery(
     if (method === "PUT") {
       try {
         const { caption } = (await req.json()) as any ?? {};
-        await env.DB.prepare("UPDATE gallery_media SET caption=?, updated_at=datetime('now') WHERE id=?").bind(caption||null, mediaId).run();
+        await env.DB.prepare("UPDATE gallery_media SET caption=?, updated_at=datetime('now') WHERE id=?").bind(caption || null, mediaId).run();
         return json(await env.DB.prepare("SELECT * FROM gallery_media WHERE id = ?").bind(mediaId).first());
       } catch { return jsonError("Failed to update media", 500); }
     }
