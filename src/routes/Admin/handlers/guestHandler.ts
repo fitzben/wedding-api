@@ -11,7 +11,7 @@ export async function handleGuests(
   env: Env,
   user: JWTPayload,
   method: string,
-  pathname: string
+  pathname: string,
 ) {
   if (pathname === "/api/admin/guests") {
     if (method === "GET") {
