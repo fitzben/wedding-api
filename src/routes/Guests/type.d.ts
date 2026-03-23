@@ -22,4 +22,7 @@ export type Guest = {
   deleted_at?: string;
   visited_at?: string;
   invite_url?: string;
+  event_access_override?: string | null;
+  default_event_access?: string | null;
+  resolved_event_access?: string;
 };

@@ -40,11 +40,12 @@ export async function handleGuests(
         const {
           first_name, last_name, phone_number,
           category, pax_allowed, priority, importance, notes,
-          guest_group_id, invitation_type,
+          guest_group_id, invitation_type, event_access_override,
         } = body ?? {};
         if (!first_name || !last_name || !phone_number)
           return jsonError("first_name, last_name and phone_number are required", 400);
         const validInviteTypes = ["digital", "physical", "both"];
+        const validAccess = ["both", "hm_only", "resepsi_only"];
         return json(await createGuest(env, {
           first_name, last_name,
           phone_number: normalisePhone(phone_number),
@@ -55,7 +56,8 @@ export async function handleGuests(
           notes: notes || null,
           guest_group_id: guest_group_id || null,
           invitation_type: validInviteTypes.includes(invitation_type) ? invitation_type : "digital",
-          created_by: user.user_id, // Note: using user_id from JWTPayload
+          event_access_override: validAccess.includes(event_access_override) ? event_access_override : null,
+          created_by: user.user_id,
           updated_by: user.user_id,
         }), 201);
       } catch { return jsonError("Invalid JSON body", 400); }
@@ -85,6 +87,12 @@ export async function handleGuests(
         if (body.invitation_type !== undefined && !['digital', 'physical', 'both'].includes(body.invitation_type)) body.invitation_type = 'digital';
         if (body.priority !== undefined && !['low', 'medium', 'high'].includes(body.priority)) body.priority = 'medium';
         if (body.importance !== undefined && !['normal', 'vip', 'vvip'].includes(body.importance)) body.importance = 'normal';
+        if (body.event_access_override !== undefined) {
+          const validAccess = ["both", "hm_only", "resepsi_only"];
+          body.event_access_override = validAccess.includes(body.event_access_override)
+            ? body.event_access_override
+            : null; // null = reset to inherit from group
+        }
         body.updated_by = user.user_id;
         const updated = await editGuest(env, id, body);
         if (!updated) return jsonError("Guest not found", 404);
