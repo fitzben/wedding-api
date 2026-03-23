@@ -25,12 +25,7 @@
 			"binding": "MEDIA_BUCKET",
 			"bucket_name": "wedding-bucket"
 		}
-	],
-	"vars": {
-		"JWT_SECRET": "dev_secret_wedding_api_12345",
-		"R2_PUBLIC_URL": "https://media.benelin.my.id",
-		"R2_ACCOUNT_ID": "22dd3e86e45298d3ece7413285265155"
-	}
+	]
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
