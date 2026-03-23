@@ -4,9 +4,9 @@ import { handleAuthRoutes } from "./routes/Auth/auth";
 import { handleAdminRoutes } from "./routes/Admin/admin";
 import { handleRsvpRoutes } from "./routes/RSVP/rsvp";
 import { handleWishRoutes } from "./routes/Wish/wish";
-import { handlePublicGiftRegistry } from "./routes/Gifts/registry";
-import { handlePublicSettings } from "./routes/Settings/publicSettings";
-import { handlePublicGallery } from "./routes/Gallery/publicGallery";
+import { handleSettingsRoutes } from "./routes/Settings/settings";
+import { handleGalleryRoutes } from "./routes/Gallery/gallery";
+import { handleGiftsRoutes } from "./routes/Gift/gift";
 import { withCORS } from "./utils/cors";
 
 export interface Env {
@@ -33,6 +33,12 @@ export default {
 
     if (pathname.startsWith("/api/guests")) {
       response = await handleGuestRoutes(request, url, env);
+    } else if (pathname.startsWith("/api/settings")) {
+      response = await handleSettingsRoutes(request, url, env);
+    } else if (pathname.startsWith("/api/gallery")) {
+      response = await handleGalleryRoutes(request, url, env);
+    } else if (pathname.startsWith("/api/gifts")) {
+      response = await handleGiftsRoutes(request, url, env);
     } else if (pathname.startsWith("/api/admin")) {
       response = await handleAdminRoutes(request, url, env);
     } else if (pathname.startsWith("/api/auth")) {
@@ -41,12 +47,6 @@ export default {
       response = await handleRsvpRoutes(request, url, env);
     } else if (pathname.startsWith("/api/wishes")) {
       response = await handleWishRoutes(request, url, env);
-    } else if (pathname.startsWith("/api/gifts/registry")) {
-      response = await handlePublicGiftRegistry(request, url, env);
-    } else if (pathname.startsWith("/api/settings")) {
-      response = await handlePublicSettings(request, url, env);
-    } else if (pathname.startsWith("/api/gallery")) {
-      response = await handlePublicGallery(request, url, env);
     } else if (pathname === "/api/health") {
       response = await handleHealthRoute(request);
     } else if (pathname.startsWith("/api/")) {

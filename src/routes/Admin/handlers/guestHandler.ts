@@ -40,11 +40,12 @@ export async function handleGuests(
         const {
           first_name, last_name, phone_number,
           category, pax_allowed, priority, importance, notes,
-          guest_group_id, invitation_type,
+          guest_group_id, invitation_type, event_access_override,
         } = body ?? {};
         if (!first_name || !last_name || !phone_number)
           return jsonError("first_name, last_name and phone_number are required", 400);
         const validInviteTypes = ["digital", "physical", "both"];
+        const validAccess = ["both", "hm_only", "resepsi_only"];
         return json(await createGuest(env, {
           first_name, last_name,
           phone_number: normalisePhone(phone_number),
@@ -55,7 +56,8 @@ export async function handleGuests(
           notes: notes || null,
           guest_group_id: guest_group_id || null,
           invitation_type: validInviteTypes.includes(invitation_type) ? invitation_type : "digital",
-          created_by: user.user_id, // Note: using user_id from JWTPayload
+          event_access_override: validAccess.includes(event_access_override) ? event_access_override : null,
+          created_by: user.user_id,
           updated_by: user.user_id,
         }), 201);
       } catch { return jsonError("Invalid JSON body", 400); }
@@ -73,23 +75,8 @@ export async function handleGuests(
   }
 
   if (pathname.startsWith("/api/admin/guests/") && pathname !== "/api/admin/guests/bulk-delete") {
-    const id = pathname.split("/")[4]; // guests/{id} or guests/{id}/mark-invited
+    const id = pathname.split("/").pop();
     if (!id) return jsonError("Invalid ID", 400);
-
-    // ── PATCH /:id/mark-invited — toggle invite_status sent/pending ──────────
-    if (pathname.endsWith("/mark-invited") && method === "PATCH") {
-      try {
-        const { status } = (await req.json()) as any ?? {};
-        const validStatuses = ["sent", "pending"];
-        const newStatus = validStatuses.includes(status) ? status : "sent";
-        const res = await env.DB.prepare(
-          "UPDATE guests SET invite_status = ?, updated_at = datetime('now'), updated_by = ? WHERE id = ? AND deleted_at IS NULL"
-        ).bind(newStatus, user.user_id, id).run();
-        if (!res.meta.changes) return jsonError("Guest not found", 404);
-        return json({ id, invite_status: newStatus });
-      } catch { return jsonError("Failed to update invite status", 500); }
-    }
-
     if (method === "PUT") {
       try {
         const body = (await req.json()) as any;
@@ -100,6 +87,12 @@ export async function handleGuests(
         if (body.invitation_type !== undefined && !['digital', 'physical', 'both'].includes(body.invitation_type)) body.invitation_type = 'digital';
         if (body.priority !== undefined && !['low', 'medium', 'high'].includes(body.priority)) body.priority = 'medium';
         if (body.importance !== undefined && !['normal', 'vip', 'vvip'].includes(body.importance)) body.importance = 'normal';
+        if (body.event_access_override !== undefined) {
+          const validAccess = ["both", "hm_only", "resepsi_only"];
+          body.event_access_override = validAccess.includes(body.event_access_override)
+            ? body.event_access_override
+            : null; // null = reset to inherit from group
+        }
         body.updated_by = user.user_id;
         const updated = await editGuest(env, id, body);
         if (!updated) return jsonError("Guest not found", 404);
