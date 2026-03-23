@@ -56,26 +56,41 @@ export async function getGuestsPaginated(
   }
 
   // Count total
+  // Re-alias whereClause for aliased query (g.column)
+  const aliasedWhere = whereClause
+    .replace(/deleted_at/g, "g.deleted_at")
+    .replace(/display_name/g, "g.display_name")
+    .replace(/phone_number/g, "g.phone_number")
+    .replace(/category/g, "g.category")
+    .replace(/priority/g, "g.priority")
+    .replace(/importance/g, "g.importance")
+    .replace(/guest_group_id/g, "g.guest_group_id")
+    .replace(/invitation_type/g, "g.invitation_type");
+
   const totalResult = await env.DB.prepare(
-    `SELECT COUNT(*) as total FROM guests ${whereClause}`,
+    `SELECT COUNT(*) as total FROM guests g LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id AND gg.deleted_at IS NULL ${aliasedWhere}`,
   )
     .bind(...bindParams)
     .first<{ total: number }>();
 
   const total = totalResult?.total ?? 0;
 
-  // Fetch paginated data
+  // Fetch with group join to resolve event_access
+  // resolved_event_access = guest override ?? group default ?? 'both'
   const { results } = await env.DB.prepare(
-    `SELECT * FROM guests ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    `SELECT g.*,
+       gg.name AS guest_group_name,
+       gg.default_event_access AS group_event_access,
+       COALESCE(g.event_access_override, gg.default_event_access, 'both') AS resolved_event_access
+     FROM guests g
+     LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id AND gg.deleted_at IS NULL
+     ${aliasedWhere}
+     ORDER BY g.created_at DESC LIMIT ? OFFSET ?`,
   )
     .bind(...bindParams, limit, offset)
     .all<Guest>();
 
-  return {
-    data: results,
-    total,
-    page,
-  };
+  return { data: results, total, page };
 }
 
 type CreateGuestInput = {
@@ -89,6 +104,7 @@ type CreateGuestInput = {
   importance?: string;
   guest_group_id?: string | null;
   invitation_type?: string;
+  event_access_override?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
 };
@@ -114,6 +130,7 @@ export async function createGuest(
     category = "friend", pax_allowed = 1,
     priority = "medium", importance = "normal",
     notes = null, guest_group_id = null, invitation_type = "digital",
+    event_access_override = null,
     created_by = null, updated_by = null
   } = input;
 
@@ -129,15 +146,17 @@ export async function createGuest(
 
   await env.DB.prepare(
     `INSERT INTO guests (
-      id, first_name, last_name, phone_number, display_name, slug, 
-      category, priority, importance, pax_allowed, invite_status, rsvp_status, 
-      notes, guest_group_id, invitation_type, created_by, updated_by, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, first_name, last_name, phone_number, display_name, slug,
+      category, priority, importance, pax_allowed, invite_status, rsvp_status,
+      notes, guest_group_id, invitation_type, event_access_override,
+      created_by, updated_by, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id, first_name, last_name, phone_number, display_name, slug,
       category, priority, importance, pax_allowed, invite_status, rsvp_status,
-      notes, guest_group_id, invitation_type, created_by, updated_by, created_at
+      notes, guest_group_id, invitation_type, event_access_override,
+      created_by, updated_by, created_at
     )
     .run();
 
@@ -164,7 +183,7 @@ export async function editGuest(
     "first_name", "last_name", "display_name", "phone_number",
     "category", "priority", "importance", "pax_allowed",
     "invite_status", "rsvp_status", "notes", "guest_group_id",
-    "invitation_type", "updated_by"
+    "invitation_type", "event_access_override", "updated_by"
   ];
 
   const updated_at = new Date().toISOString();
@@ -197,7 +216,13 @@ export async function getGuestBySlug(
   slug: string,
 ): Promise<Guest | null> {
   const result = await env.DB.prepare(
-    "SELECT * FROM guests WHERE slug = ? AND deleted_at IS NULL LIMIT 1",
+    `SELECT g.*,
+       gg.name AS guest_group_name,
+       gg.default_event_access AS group_event_access,
+       COALESCE(g.event_access_override, gg.default_event_access, 'both') AS resolved_event_access
+     FROM guests g
+     LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id AND gg.deleted_at IS NULL
+     WHERE g.slug = ? AND g.deleted_at IS NULL LIMIT 1`,
   )
     .bind(slug)
     .first<Guest>();

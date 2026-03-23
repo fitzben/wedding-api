@@ -1,5 +1,5 @@
 import { Env } from "../..";
-import { createWish, CreateWishInput } from "../../services/wishService";
+import { createWish, getWishes, CreateWishInput } from "../../services/wishService";
 
 export async function handleWishRoutes(
   request: Request,
@@ -10,6 +10,20 @@ export async function handleWishRoutes(
   const method = request.method.toUpperCase();
 
   if (pathname === "/api/wishes") {
+    if (method === "GET") {
+      try {
+        const wishes = await getWishes(env);
+        return new Response(JSON.stringify({ wishes }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch {
+        return new Response(JSON.stringify({ error: "Failed to fetch wishes" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+    }
+
     if (method === "POST") {
       try {
         const body = (await request.json()) as Partial<CreateWishInput>;
@@ -17,26 +31,17 @@ export async function handleWishRoutes(
 
         if (!name || !message) {
           return new Response(
-            JSON.stringify({
-              error: "name and message are required",
-            }),
-            {
-              status: 400,
-              headers: { "Content-Type": "application/json" },
-            }
+            JSON.stringify({ error: "name and message are required" }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
           );
         }
 
-        const newWish = await createWish(env, {
-          name,
-          message,
-        });
-
+        const newWish = await createWish(env, { name, message });
         return new Response(JSON.stringify(newWish), {
           status: 201,
           headers: { "Content-Type": "application/json" },
         });
-      } catch (error) {
+      } catch {
         return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
