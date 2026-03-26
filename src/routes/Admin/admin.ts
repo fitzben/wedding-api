@@ -14,7 +14,7 @@ import { jsonError } from "./handlers/utils";
 export const handleAdminRoutes = async (
   request: Request,
   url: URL,
-  env: Env
+  env: Env,
 ): Promise<Response> => {
   const { pathname } = url;
   const method = request.method.toUpperCase();
@@ -23,14 +23,25 @@ export const handleAdminRoutes = async (
     // ══════════════════════════════════════════════════════════════════════
     // ROLE-BASED ACCESS CONTROL
     // ══════════════════════════════════════════════════════════════════════
-    
-    // Admin has full access. Parents can only access Guest-related routes.
-    if (user.role === "parents") {
-      if (!pathname.startsWith("/api/admin/guests")) {
-        return jsonError("Forbidden: Your role does not have access to this resource", 403);
-      }
-    } else if (user.role !== "admin") {
+
+    const ROLE_ROUTES: Record<string, string[]> = {
+      admin: ["/api/admin"],
+      parents: ["/api/admin/guests", "/api/admin/guest-groups"],
+      partner: ["/api/admin/gallery", "/api/admin/gifts"],
+    };
+
+    const allowed = ROLE_ROUTES[user.role];
+
+    if (!allowed) {
       return jsonError("Forbidden: Access denied", 403);
+    }
+
+    const hasAccess = allowed.some((prefix) => pathname.startsWith(prefix));
+    if (!hasAccess) {
+      return jsonError(
+        "Forbidden: Your role does not have access to this resource",
+        403,
+      );
     }
 
     // ══════════════════════════════════════════════════════════════════════
