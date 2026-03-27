@@ -1,5 +1,5 @@
 import { Env } from "../..";
-import { createRsvp, CreateRsvpInput } from "../../services/rsvpService";
+import { createRsvp, CreateRsvpInput, updateRsvp, getRsvpByGuestId, getRsvpByName } from "../../services/rsvpService";
 
 export async function handleRsvpRoutes(
   request: Request,
@@ -10,7 +10,7 @@ export async function handleRsvpRoutes(
   const method = request.method.toUpperCase();
 
   if (pathname === "/api/rsvp") {
-    if (method === "POST") {
+    if (method === "POST" || method === "PUT") {
       try {
         const body = (await request.json()) as Partial<CreateRsvpInput>;
         const { name, attendance, pax, message, guest_id } = body;
@@ -40,11 +40,32 @@ export async function handleRsvpRoutes(
           );
         }
 
+        let existingRsvp = null;
+        if (guest_id) {
+          existingRsvp = await getRsvpByGuestId(env, guest_id);
+        } else if (name) {
+          // Fallback: search by name if guest_id is null/missing
+          existingRsvp = await getRsvpByName(env, name.trim());
+        }
+
+        if (existingRsvp) {
+          await updateRsvp(env, existingRsvp.id, {
+            name: name.trim(),
+            attendance,
+            pax: Number(pax),
+            message: message?.trim(),
+          });
+          return new Response(JSON.stringify({ id: existingRsvp.id, updated: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+
         const newRsvp = await createRsvp(env, {
-          name,
+          name: name.trim(),
           attendance,
           pax: Number(pax),
-          message,
+          message: message?.trim(),
           guest_id,
         });
 
