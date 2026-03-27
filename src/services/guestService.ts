@@ -219,13 +219,18 @@ export async function getGuestBySlug(
     `SELECT g.*,
        gg.name AS guest_group_name,
        gg.default_event_access AS group_event_access,
-       COALESCE(g.event_access_override, gg.default_event_access, 'both') AS resolved_event_access
+       COALESCE(g.event_access_override, gg.default_event_access, 'both') AS resolved_event_access,
+       r.attendance AS rsvp_attendance,
+       r.pax AS rsvp_pax,
+       r.message AS rsvp_message,
+       r.id AS rsvp_id
      FROM guests g
      LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id AND gg.deleted_at IS NULL
+     LEFT JOIN rsvps r ON r.guest_id = g.id
      WHERE g.slug = ? AND g.deleted_at IS NULL LIMIT 1`,
   )
     .bind(slug)
-    .first<Guest>();
+    .first<any>();
 
   if (!result) return null;
 

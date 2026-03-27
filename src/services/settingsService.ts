@@ -33,6 +33,12 @@ const PUBLIC_KEYS = [
   "groom_father",
   "groom_mother",
   "groom_child_order",
+  "groom_bank_account",
+  "groom_bank_name",
+  "groom_bank_account_name",
+  "bride_bank_account",
+  "bride_bank_name",
+  "bride_bank_account_name",
 ];
 
 export async function getPublicSettings(
