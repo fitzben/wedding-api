@@ -7,6 +7,7 @@ import { handleWishRoutes } from "./routes/Wish/wish";
 import { handleSettingsRoutes } from "./routes/Settings/settings";
 import { handleGalleryRoutes } from "./routes/Gallery/gallery";
 import { handleGiftsRoutes } from "./routes/Gift/gift";
+import { handleJourneyRoutes } from "./routes/Journey/journey";
 import { withCORS } from "./utils/cors";
 
 export interface Env {
@@ -39,6 +40,8 @@ export default {
       response = await handleGalleryRoutes(request, url, env);
     } else if (pathname.startsWith("/api/gifts")) {
       response = await handleGiftsRoutes(request, url, env);
+    } else if (pathname.startsWith("/api/journey")) {
+      response = await handleJourneyRoutes(request, url, env);
     } else if (pathname.startsWith("/api/admin")) {
       response = await handleAdminRoutes(request, url, env);
     } else if (pathname.startsWith("/api/auth")) {
