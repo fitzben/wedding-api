@@ -9,6 +9,7 @@ import { handleUsers } from "./handlers/userHandler";
 import { handleSettings } from "./handlers/settingsHandler";
 import { handleChangePassword } from "./handlers/passwordHandler";
 import { handleRsvpsAndWishes } from "./handlers/rsvpWishHandler";
+import { handleJourney } from "./handlers/journeyHandler";
 import { jsonError } from "./handlers/utils";
 
 export const handleAdminRoutes = async (
@@ -26,7 +27,7 @@ export const handleAdminRoutes = async (
 
     const ROLE_ROUTES: Record<string, string[]> = {
       admin: ["/api/admin"],
-      parents: ["/api/admin/guests", "/api/admin/guest-groups"],
+      parents: ["/api/admin/guests", "/api/admin/guest-groups", "/api/admin/journey"],
       partner: ["/api/admin/gallery", "/api/admin/gifts"],
     };
 
@@ -91,6 +92,11 @@ export const handleAdminRoutes = async (
     // RSVP / Wishes (Read-only for Admin)
     if (pathname === "/api/admin/rsvp" || pathname === "/api/admin/wishes") {
       return handleRsvpsAndWishes(env, method, pathname);
+    }
+
+    // Journey
+    if (pathname.startsWith("/api/admin/journey")) {
+      return handleJourney(req, url, env, method, pathname);
     }
 
     return jsonError("Not Found", 404);

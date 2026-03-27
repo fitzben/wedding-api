@@ -14,11 +14,11 @@ async function generateToken(userId: string, role: string) {
   return token;
 }
 
-async function run() {
-  const adminToken = await generateToken("admin-001", "admin");
-  const parentsToken = await generateToken("parents-001", "parents");
-  console.log("ADMIN_TOKEN=" + adminToken);
-  console.log("PARENTS_TOKEN=" + parentsToken);
-}
+// async function run() {
+//   const adminToken = await generateToken("admin-001", "admin");
+//   const parentsToken = await generateToken("parents-001", "parents");
+//   console.log("ADMIN_TOKEN=" + adminToken);
+//   console.log("PARENTS_TOKEN=" + parentsToken);
+// }
 
-run();
+// run();
