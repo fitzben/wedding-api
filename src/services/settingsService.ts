@@ -39,6 +39,8 @@ const PUBLIC_KEYS = [
   "bride_bank_account",
   "bride_bank_name",
   "bride_bank_account_name",
+  "journey_background",
+  "couple_quote",
 ];
 
 export async function getPublicSettings(
