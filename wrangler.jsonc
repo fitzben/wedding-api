@@ -13,6 +13,12 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	"routes": [
+		{
+			"pattern": "benelin.my.id/api/*",
+			"zone_name": "benelin.my.id"
+		}
+	],
 	"d1_databases": [
 		{
 			"binding": "DB",
