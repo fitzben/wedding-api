@@ -9,6 +9,7 @@ import { handleGalleryRoutes } from "./routes/Gallery/gallery";
 import { handleGiftsRoutes } from "./routes/Gift/gift";
 import { handleJourneyRoutes } from "./routes/Journey/journey";
 import { withCORS } from "./utils/cors";
+import { withSecurityHeaders } from "./utils/security";
 
 export interface Env {
   DB: D1Database;
@@ -27,7 +28,10 @@ export default {
 
     // Handle OPTIONS request (preflight)
     if (request.method === "OPTIONS") {
-      return withCORS(new Response(null, { status: 200 }), request);
+      return withCORS(
+        withSecurityHeaders(new Response(null, { status: 200 })),
+        request,
+      );
     }
 
     let response: Response;
@@ -61,6 +65,6 @@ export default {
       response = new Response("Not Found", { status: 404 });
     }
 
-    return withCORS(response, request);
+    return withCORS(withSecurityHeaders(response), request);
   },
 };
