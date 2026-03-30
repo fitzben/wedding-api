@@ -24,23 +24,16 @@ const PUBLIC_KEYS = [
   "gift_enabled",
   "wishes_enabled",
   "maintenance_mode",
-  "maintenance_message",
-  "bride_instagram",
-  "bride_father",
-  "bride_mother",
-  "bride_child_order",
-  "groom_instagram",
-  "groom_father",
-  "groom_mother",
-  "groom_child_order",
-  "groom_bank_account",
-  "groom_bank_name",
-  "groom_bank_account_name",
-  "bride_bank_account",
-  "bride_bank_name",
-  "bride_bank_account_name",
-  "journey_background",
-  "couple_quote",
+  // Live streaming
+  "stream_url",
+  "stream_label",
+  "stream_start",
+  "stream_end",
+  "stream_embed_enabled",
+  // Dress code
+  "dress_code_colors",
+  "dress_code_theme",
+  "dress_code_notes",
 ];
 
 export async function getPublicSettings(
