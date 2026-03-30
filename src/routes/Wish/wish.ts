@@ -36,6 +36,16 @@ export async function handleWishRoutes(
           );
         }
 
+        // 1. Validate name length
+        if (name.length > 100) {
+          return new Response(JSON.stringify({ error: "Name too long (max 100)" }), { status: 400 });
+        }
+
+        // 2. Validate message length
+        if (message.length > 1000) {
+          return new Response(JSON.stringify({ error: "Message too long (max 1000)" }), { status: 400 });
+        }
+
         const newWish = await createWish(env, { name, message });
         return new Response(JSON.stringify(newWish), {
           status: 201,
