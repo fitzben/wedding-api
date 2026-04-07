@@ -21,7 +21,7 @@ export async function getGuestsPaginated(
     importance?: string;
     guest_group_id?: string;
     invitation_type?: string;
-  } = {}
+  } = {},
 ): Promise<{ data: Guest[]; total: number; page: number }> {
   const offset = (page - 1) * limit;
 
@@ -107,6 +107,8 @@ type CreateGuestInput = {
   event_access_override?: string | null;
   created_by?: string | null;
   updated_by?: string | null;
+  display_name?: string | null;
+  enable_display_name?: boolean;
 };
 
 async function ensureUniqueSlug(db: D1Database, slug: string): Promise<string> {
@@ -126,12 +128,20 @@ export async function createGuest(
   input: CreateGuestInput,
 ): Promise<Guest> {
   const {
-    first_name, last_name, phone_number,
-    category = "friend", pax_allowed = 1,
-    priority = "medium", importance = "normal",
-    notes = null, guest_group_id = null, invitation_type = "digital",
+    first_name,
+    last_name,
+    phone_number,
+    category = "friend",
+    pax_allowed = 1,
+    priority = "medium",
+    importance = "normal",
+    notes = null,
+    guest_group_id = null,
+    invitation_type = "digital",
     event_access_override = null,
-    created_by = null, updated_by = null
+    created_by = null,
+    updated_by = null,
+    enable_display_name = false,
   } = input;
 
   const id = crypto.randomUUID();
@@ -149,22 +159,44 @@ export async function createGuest(
       id, first_name, last_name, phone_number, display_name, slug,
       category, priority, importance, pax_allowed, invite_status, rsvp_status,
       notes, guest_group_id, invitation_type, event_access_override,
-      created_by, updated_by, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      created_by, updated_by, created_at, enable_display_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
-      id, first_name, last_name, phone_number, display_name, slug,
-      category, priority, importance, pax_allowed, invite_status, rsvp_status,
-      notes, guest_group_id, invitation_type, event_access_override,
-      created_by, updated_by, created_at
+      id,
+      first_name,
+      last_name,
+      phone_number,
+      input?.display_name || display_name,
+      slug,
+      category,
+      priority,
+      importance,
+      pax_allowed,
+      invite_status,
+      rsvp_status,
+      notes,
+      guest_group_id,
+      invitation_type,
+      event_access_override,
+      created_by,
+      updated_by,
+      created_at,
+      enable_display_name ? 1 : 0,
     )
     .run();
 
-  const result = await env.DB.prepare("SELECT * FROM guests WHERE id = ?").bind(id).first<Guest>();
+  const result = await env.DB.prepare("SELECT * FROM guests WHERE id = ?")
+    .bind(id)
+    .first<Guest>();
   return result!;
 }
 
-export async function deleteGuest(env: Env, id: string, userId: string): Promise<boolean> {
+export async function deleteGuest(
+  env: Env,
+  id: string,
+  userId: string,
+): Promise<boolean> {
   const now = new Date().toISOString();
   const info = await env.DB.prepare(
     "UPDATE guests SET deleted_at = ?, deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
@@ -180,10 +212,22 @@ export async function editGuest(
   updates: Partial<Guest>,
 ): Promise<Guest | null> {
   const allowedFields = [
-    "first_name", "last_name", "display_name", "phone_number",
-    "category", "priority", "importance", "pax_allowed",
-    "invite_status", "rsvp_status", "notes", "guest_group_id",
-    "invitation_type", "event_access_override", "updated_by"
+    "first_name",
+    "last_name",
+    "display_name",
+    "phone_number",
+    "category",
+    "priority",
+    "importance",
+    "pax_allowed",
+    "invite_status",
+    "rsvp_status",
+    "notes",
+    "guest_group_id",
+    "invitation_type",
+    "event_access_override",
+    "updated_by",
+    "enable_display_name",
   ];
 
   const updated_at = new Date().toISOString();
