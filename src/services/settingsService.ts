@@ -24,6 +24,7 @@ const PUBLIC_KEYS = [
   "gift_enabled",
   "wishes_enabled",
   "maintenance_mode",
+  "journey_background",
   // Live streaming
   "stream_url",
   "stream_label",

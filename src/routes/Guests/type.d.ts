@@ -25,4 +25,5 @@ export type Guest = {
   event_access_override?: string | null;
   default_event_access?: string | null;
   resolved_event_access?: string;
+  enable_display_name: boolean;
 };
