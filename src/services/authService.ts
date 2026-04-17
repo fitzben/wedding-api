@@ -6,21 +6,14 @@ export interface User {
   email: string;
   role: string;
   password_hash?: string;
-  password?: string; // for backward compatibility before migration
 }
 
 export const findUserByEmail = async (email: string, db: D1Database): Promise<User | null> => {
-  // Check admin_users first
-  const adminUser = await db.prepare("SELECT * FROM admin_users WHERE email = ?").bind(email).first<User>();
-  if (adminUser) return adminUser;
-
-  // Fallback to old users table during transition
-  try {
-    const oldUser = await db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first<User>();
-    return oldUser;
-  } catch {
-    return null;
-  }
+  const user = await db
+    .prepare("SELECT * FROM admin_users WHERE email = ?")
+    .bind(email)
+    .first<User>();
+  return user ?? null;
 };
 
 export const verifyPassword = async (password: string, stored: string): Promise<boolean> => {

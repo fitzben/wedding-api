@@ -6,20 +6,21 @@ export type CreateRsvpInput = {
   pax: number;
   message?: string;
   guest_id?: string;
+  event_attendance?: string | null;
 };
 
 export async function createRsvp(
   env: Env,
   input: CreateRsvpInput
 ): Promise<{ id: string } | null> {
-  const { name, attendance, pax, message, guest_id } = input;
+  const { name, attendance, pax, message, guest_id, event_attendance } = input;
 
   const id = Date.now().toString();
   const created_at = new Date().toISOString();
 
   await env.DB.prepare(
-    `INSERT INTO rsvps (id, guest_id, name, attendance, pax, message, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO rsvps (id, guest_id, name, attendance, pax, message, event_attendance, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   )
     .bind(
       id,
@@ -28,6 +29,7 @@ export async function createRsvp(
       attendance,
       pax,
       message || null,
+      event_attendance ?? null,
       created_at
     )
     .run();
@@ -40,7 +42,7 @@ export async function updateRsvp(
   id: string,
   input: Partial<CreateRsvpInput>
 ): Promise<boolean> {
-  const { name, attendance, pax, message } = input;
+  const { name, attendance, pax, message, event_attendance } = input;
   const updated_at = new Date().toISOString();
 
   const fields: string[] = [];
@@ -50,6 +52,7 @@ export async function updateRsvp(
   if (attendance) { fields.push("attendance = ?"); values.push(attendance); }
   if (pax !== undefined) { fields.push("pax = ?"); values.push(Number(pax)); }
   if (message !== undefined) { fields.push("message = ?"); values.push(message || null); }
+  if (event_attendance !== undefined) { fields.push("event_attendance = ?"); values.push(event_attendance ?? null); }
 
   if (fields.length === 0) return false;
 
