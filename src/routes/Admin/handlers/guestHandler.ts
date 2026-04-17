@@ -37,6 +37,7 @@ export async function handleGuests(
             importance: filter_importance,
             guest_group_id: filter_guest_group_id,
             invitation_type: filter_invitation_type,
+            created_by: url.searchParams.get("created_by") || undefined,
           }),
         );
       } catch {

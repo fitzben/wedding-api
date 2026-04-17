@@ -30,6 +30,9 @@ export async function handleDashboard(env: Env) {
         env.DB.prepare("SELECT COUNT(*) as not_attending FROM rsvps WHERE attendance='no'"),
         env.DB.prepare("SELECT COUNT(*) as maybe FROM rsvps WHERE attendance='maybe'"),
         env.DB.prepare("SELECT COALESCE(SUM(pax),0) as total_pax FROM rsvps WHERE attendance='yes'"),
+        env.DB.prepare("SELECT COUNT(*) as hm_only FROM rsvps WHERE event_attendance='hm_only' AND attendance != 'no'"),
+        env.DB.prepare("SELECT COUNT(*) as resepsi_only FROM rsvps WHERE event_attendance='resepsi_only' AND attendance != 'no'"),
+        env.DB.prepare("SELECT COUNT(*) as both_events FROM rsvps WHERE event_attendance='both' AND attendance != 'no'"),
       ]),
 
       // Wishes count
@@ -62,7 +65,7 @@ export async function handleDashboard(env: Env) {
     for (const r of byPriRows.results as any[]) by_priority[r.priority || 'medium'] = r.count;
 
     // Parse RSVP stats
-    const [rsvpTotal, rsvpAttend, rsvpNot, rsvpMaybe, rsvpPax] = rsvpStats;
+    const [rsvpTotal, rsvpAttend, rsvpNot, rsvpMaybe, rsvpPax, rsvpHM, rsvpResepsi, rsvpBoth] = rsvpStats;
 
     // Parse gift stats
     const [giftTransfer, giftPhysical, giftStatus] = giftStats;
@@ -84,11 +87,14 @@ export async function handleDashboard(env: Env) {
         not_sent:     (notSentRow.results[0] as any)?.not_sent || 0,
       },
       rsvp: {
-        total:         (rsvpTotal.results[0] as any)?.total || 0,
-        attending:     (rsvpAttend.results[0] as any)?.attending || 0,
-        not_attending: (rsvpNot.results[0] as any)?.not_attending || 0,
-        maybe:         (rsvpMaybe.results[0] as any)?.maybe || 0,
-        total_pax:     (rsvpPax.results[0] as any)?.total_pax || 0,
+        total:          (rsvpTotal.results[0] as any)?.total || 0,
+        attending:      (rsvpAttend.results[0] as any)?.attending || 0,
+        not_attending:  (rsvpNot.results[0] as any)?.not_attending || 0,
+        maybe:          (rsvpMaybe.results[0] as any)?.maybe || 0,
+        total_pax:      (rsvpPax.results[0] as any)?.total_pax || 0,
+        hm_only:        (rsvpHM.results[0] as any)?.hm_only || 0,
+        resepsi_only:   (rsvpResepsi.results[0] as any)?.resepsi_only || 0,
+        both_events:    (rsvpBoth.results[0] as any)?.both_events || 0,
       },
       wishes_count:  (wishesCount as any)?.count || 0,
       recent_wishes: recentWishes.results,

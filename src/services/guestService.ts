@@ -21,6 +21,7 @@ export async function getGuestsPaginated(
     importance?: string;
     guest_group_id?: string;
     invitation_type?: string;
+    created_by?: string;
   } = {},
 ): Promise<{ data: Guest[]; total: number; page: number }> {
   const offset = (page - 1) * limit;
@@ -54,6 +55,10 @@ export async function getGuestsPaginated(
     whereClause += " AND invitation_type = ?";
     bindParams.push(filters.invitation_type);
   }
+  if (filters.created_by) {
+    whereClause += " AND created_by = ?";
+    bindParams.push(filters.created_by);
+  }
 
   // Count total
   // Re-alias whereClause for aliased query (g.column)
@@ -65,7 +70,8 @@ export async function getGuestsPaginated(
     .replace(/priority/g, "g.priority")
     .replace(/importance/g, "g.importance")
     .replace(/guest_group_id/g, "g.guest_group_id")
-    .replace(/invitation_type/g, "g.invitation_type");
+    .replace(/invitation_type/g, "g.invitation_type")
+    .replace(/\bcreated_by\b/g, "g.created_by");
 
   const totalResult = await env.DB.prepare(
     `SELECT COUNT(*) as total FROM guests g LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id AND gg.deleted_at IS NULL ${aliasedWhere}`,
