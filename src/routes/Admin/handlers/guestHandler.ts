@@ -7,6 +7,7 @@ import {
   getGuestsPaginated,
 } from "../../../services/guestService";
 import { JWTPayload } from "../../../utils/jwt";
+import { writeAuditLog } from "../../../services/auditService";
 
 export async function handleGuests(
   req: Request,
@@ -69,8 +70,7 @@ export async function handleGuests(
           );
         const validInviteTypes = ["digital", "physical", "both"];
         const validAccess = ["both", "hm_only", "resepsi_only"];
-        return json(
-          await createGuest(env, {
+        const result = await createGuest(env, {
             first_name,
             last_name,
             phone_number: normalisePhone(phone_number),
@@ -90,12 +90,132 @@ export async function handleGuests(
             updated_by: user.user_id,
             display_name: display_name,
             enable_display_name: !!enable_display_name,
-          }),
-          201,
-        );
+          });
+        writeAuditLog(env, user, "guest.create", "guests", {
+          resource_id: (result as any).id,
+          detail: `${first_name} ${last_name}`,
+          request: req,
+        });
+        return json(result, 201);
       } catch {
         return jsonError("Invalid JSON body", 400);
       }
+    }
+  }
+
+  if (pathname === "/api/admin/guests/export" && method === "GET") {
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT g.*, gg.name as guest_group_name
+         FROM guests g
+         LEFT JOIN guest_groups gg ON gg.id = g.guest_group_id
+         WHERE g.deleted_at IS NULL
+         ORDER BY g.created_at DESC`
+      ).all<any>();
+
+      const headers = [
+        "first_name", "last_name", "display_name", "phone_number",
+        "category", "pax_allowed", "priority", "importance",
+        "invitation_type", "invite_status", "guest_group_name", "notes",
+      ];
+
+      const escape = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const rows = results.map((g) => headers.map((h) => escape(g[h])).join(","));
+      const csv = [headers.join(","), ...rows].join("\n");
+
+      return new Response(csv, {
+        headers: {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="guests-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    } catch {
+      return jsonError("Failed to export guests", 500);
+    }
+  }
+
+  if (pathname === "/api/admin/guests/import" && method === "POST") {
+    if (user.role !== "admin" && user.role !== "partner") {
+      return jsonError("Forbidden", 403);
+    }
+    try {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+      if (!file) return jsonError("No file uploaded", 400);
+
+      const text = await file.text();
+      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (lines.length < 2)
+        return jsonError("CSV must have header and at least one row", 400);
+
+      const rawHeader = lines[0]
+        .split(",")
+        .map((h) => h.replace(/"/g, "").trim().toLowerCase());
+      const required = ["first_name", "last_name", "phone_number"];
+      for (const r of required) {
+        if (!rawHeader.includes(r))
+          return jsonError(`Missing required column: ${r}`, 400);
+      }
+
+      const importResults = { success: 0, failed: 0, errors: [] as string[] };
+
+      for (let i = 1; i < lines.length; i++) {
+        try {
+          const values: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (const char of lines[i]) {
+            if (char === '"') { inQuotes = !inQuotes; continue; }
+            if (char === "," && !inQuotes) {
+              values.push(current.trim());
+              current = "";
+              continue;
+            }
+            current += char;
+          }
+          values.push(current.trim());
+
+          const row: Record<string, string> = {};
+          rawHeader.forEach((h, idx) => { row[h] = values[idx] || ""; });
+
+          if (!row.first_name || !row.last_name || !row.phone_number) {
+            importResults.failed++;
+            importResults.errors.push(`Row ${i}: missing required fields`);
+            continue;
+          }
+
+          const validInviteTypes = ["digital", "physical", "both"];
+          await createGuest(env, {
+            first_name: row.first_name,
+            last_name: row.last_name,
+            phone_number: normalisePhone(row.phone_number),
+            display_name: row.display_name || undefined,
+            pax_allowed: parseInt(row.pax_allowed) || 1,
+            invitation_type: validInviteTypes.includes(row.invitation_type)
+              ? row.invitation_type
+              : "digital",
+            category: "friend",
+            priority: "medium",
+            importance: "normal",
+            created_by: user.user_id,
+            updated_by: user.user_id,
+            enable_display_name: !!row.display_name,
+          });
+          importResults.success++;
+        } catch (e: any) {
+          importResults.failed++;
+          importResults.errors.push(`Row ${i}: ${e.message}`);
+        }
+      }
+
+      writeAuditLog(env, user, "guest.create", "guests", {
+        detail: `CSV import: ${importResults.success} success, ${importResults.failed} failed`,
+        request: req,
+      });
+      return json(importResults, importResults.success > 0 ? 200 : 400);
+    } catch (e: any) {
+      console.error("Import CSV error:", e?.message);
+      return jsonError("Failed to process CSV", 500);
     }
   }
 
@@ -110,15 +230,37 @@ export async function handleGuests(
       const deleted = results.filter(
         (r) => r.status === "fulfilled" && (r as any).value,
       ).length;
+      writeAuditLog(env, user, "guest.bulk_delete", "guests", {
+        detail: `${deleted} guests deleted`,
+        request: req,
+      });
       return json({ deleted, total: ids.length });
     } catch {
       return jsonError("Failed to bulk delete guests", 500);
     }
   }
 
+  // GET /api/admin/guests/names — lightweight endpoint for duplicate detection
+  if (pathname === "/api/admin/guests/names" && method === "GET") {
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT id, first_name, last_name, display_name, created_by
+         FROM guests
+         WHERE deleted_at IS NULL
+         ORDER BY created_at DESC`
+      ).all<any>();
+      return json({ names: results });
+    } catch {
+      return jsonError("Failed to fetch guest names", 500);
+    }
+  }
+
   if (
     pathname.startsWith("/api/admin/guests/") &&
-    pathname !== "/api/admin/guests/bulk-delete"
+    pathname !== "/api/admin/guests/bulk-delete" &&
+    pathname !== "/api/admin/guests/export" &&
+    pathname !== "/api/admin/guests/import" &&
+    pathname !== "/api/admin/guests/names"
   ) {
     const id = pathname.split("/").pop();
     if (!id) return jsonError("Invalid ID", 400);
@@ -161,6 +303,7 @@ export async function handleGuests(
         body.updated_by = user.user_id;
         const updated = await editGuest(env, id, body);
         if (!updated) return jsonError("Guest not found", 404);
+        writeAuditLog(env, user, "guest.update", "guests", { resource_id: id, request: req });
         return json(updated);
       } catch {
         return jsonError("Failed to update guest", 500);
@@ -170,6 +313,7 @@ export async function handleGuests(
       try {
         if (!(await deleteGuest(env, id, user.user_id)))
           return jsonError("Guest not found", 404);
+        writeAuditLog(env, user, "guest.delete", "guests", { resource_id: id, request: req });
         return new Response(null, { status: 204 });
       } catch {
         return jsonError("Failed to delete guest", 500);

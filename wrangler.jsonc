@@ -31,6 +31,13 @@
 			"binding": "MEDIA_BUCKET",
 			"bucket_name": "wedding-bucket"
 		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "3009e3fd296a45699c0c2277be0aec50",
+			"preview_id": "7e0b399e25464a89ae250105caad0bf3"
+		}
 	]
 	/**
 	 * Smart Placement

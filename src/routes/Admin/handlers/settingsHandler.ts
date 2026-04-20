@@ -1,9 +1,12 @@
 import { Env } from "../../../index";
 import { json, jsonError } from "./utils";
+import { JWTPayload } from "../../../utils/jwt";
+import { writeAuditLog } from "../../../services/auditService";
 
 export async function handleSettings(
   req: Request,
   env: Env,
+  user: JWTPayload,
   method: string,
   pathname: string
 ) {
@@ -27,6 +30,7 @@ export async function handleSettings(
           env.DB.prepare("INSERT INTO settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = datetime('now')").bind(key, JSON.stringify(value))
         );
         await env.DB.batch(stmts);
+        writeAuditLog(env, user, "settings.update", "settings", { request: req });
         return json({ ok: true });
       } catch { return jsonError("Failed to save settings", 500); }
     }

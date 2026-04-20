@@ -21,6 +21,7 @@ export async function handleDashboard(env: Env) {
         env.DB.prepare("SELECT priority, COUNT(*) as count FROM guests WHERE deleted_at IS NULL GROUP BY priority"),
         env.DB.prepare("SELECT COUNT(*) as invite_sent FROM guests WHERE invite_status='sent' AND deleted_at IS NULL"),
         env.DB.prepare("SELECT COUNT(*) as not_sent FROM guests WHERE (invite_status IS NULL OR invite_status != 'sent') AND deleted_at IS NULL"),
+        env.DB.prepare("SELECT COUNT(*) as visited_count FROM guests WHERE visited_at IS NOT NULL AND deleted_at IS NULL"),
       ]),
 
       // RSVP breakdown
@@ -56,7 +57,7 @@ export async function handleDashboard(env: Env) {
     ]);
 
     // Parse guest stats
-    const [totalRow, paxRow, byCatRows, byImpRows, byPriRows, inviteSentRow, notSentRow] = guestStats;
+    const [totalRow, paxRow, byCatRows, byImpRows, byPriRows, inviteSentRow, notSentRow, visitedRow] = guestStats;
     const by_category: Record<string, number> = {};
     for (const r of byCatRows.results as any[]) by_category[r.category || 'unknown'] = r.count;
     const by_importance: Record<string, number> = {};
@@ -85,6 +86,7 @@ export async function handleDashboard(env: Env) {
         by_priority,
         invite_sent:  (inviteSentRow.results[0] as any)?.invite_sent || 0,
         not_sent:     (notSentRow.results[0] as any)?.not_sent || 0,
+        visited_count: (visitedRow.results[0] as any)?.visited_count || 0,
       },
       rsvp: {
         total:          (rsvpTotal.results[0] as any)?.total || 0,

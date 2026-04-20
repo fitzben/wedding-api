@@ -1,5 +1,6 @@
 import { Env } from "../index";
 import { verifyToken, JWTPayload } from "../utils/jwt";
+import { isTokenBlacklisted } from "../services/authService";
 
 export type AuthenticatedHandler = (
   request: Request,
@@ -19,6 +20,14 @@ export const withAuth = (handler: AuthenticatedHandler) => {
     }
 
     const token = authHeader.split(" ")[1];
+
+    if (await isTokenBlacklisted(env.KV, token)) {
+      return new Response(JSON.stringify({ error: "Unauthorized: Token has been revoked" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const payload = await verifyToken(token, env.JWT_SECRET);
 
     if (!payload) {

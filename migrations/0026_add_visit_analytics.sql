@@ -1,0 +1,2 @@
+ALTER TABLE guests ADD COLUMN visit_count INTEGER DEFAULT 0;
+ALTER TABLE guests ADD COLUMN last_visited_at TEXT;

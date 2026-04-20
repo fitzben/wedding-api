@@ -58,6 +58,15 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 
+export async function blacklistToken(kv: KVNamespace, token: string, expiresIn: number = 43200): Promise<void> {
+  await kv.put(`blacklist:${token}`, "1", { expirationTtl: expiresIn });
+}
+
+export async function isTokenBlacklisted(kv: KVNamespace, token: string): Promise<boolean> {
+  const val = await kv.get(`blacklist:${token}`);
+  return val !== null;
+}
+
 export const generateToken = async (user: User, secret: string): Promise<string> => {
   return await signToken(
     {

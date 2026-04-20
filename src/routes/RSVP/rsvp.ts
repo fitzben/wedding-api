@@ -1,5 +1,7 @@
 import { Env } from "../..";
 import { createRsvp, CreateRsvpInput, updateRsvp, getRsvpByGuestId, getRsvpByName } from "../../services/rsvpService";
+import { rateLimit } from "../../utils/rateLimit";
+import { sanitizeName, sanitizeMessage } from "../../utils/sanitize";
 
 export async function handleRsvpRoutes(
   request: Request,
@@ -11,12 +13,47 @@ export async function handleRsvpRoutes(
 
   if (pathname === "/api/rsvp") {
     if (method === "POST" || method === "PUT") {
+      const ip = request.headers.get("CF-Connecting-IP") ||
+                 request.headers.get("X-Forwarded-For") || "unknown";
+      const rl = rateLimit(`rsvp:${ip}`, 5, 60_000);
+      if (!rl.allowed) {
+        return new Response(JSON.stringify({ error: "Too many requests. Please wait before trying again." }), {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil(rl.resetIn / 1000)),
+          },
+        });
+      }
+
+      // Check RSVP deadline
+      const deadlineSetting = await env.DB.prepare(
+        "SELECT value FROM settings WHERE key = 'rsvp_deadline'"
+      ).first<{ value: string }>();
+
+      if (deadlineSetting?.value) {
+        try {
+          const deadline = new Date(JSON.parse(deadlineSetting.value));
+          if (new Date() > deadline) {
+            return new Response(JSON.stringify({
+              error: "RSVP is closed. The deadline has passed."
+            }), {
+              status: 403,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        } catch {}
+      }
+
       try {
         const body = (await request.json()) as any;
         const { name, attendance, pax, message, guest_id, event_attendance } = body ?? {};
 
+        const safeName = sanitizeName(name || "");
+        const safeMessage = sanitizeMessage(message || "");
+
         // 1. Required fields
-        if (!name || attendance === undefined || pax === undefined) {
+        if (!safeName || attendance === undefined || pax === undefined) {
           return new Response(JSON.stringify({ error: "name, attendance, and pax are required" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -24,7 +61,7 @@ export async function handleRsvpRoutes(
         }
 
         // 2. Name length
-        if (typeof name !== "string" || name.length > 100) {
+        if (safeName.length > 100) {
           return new Response(JSON.stringify({ error: "Name too long (max 100)" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -32,7 +69,7 @@ export async function handleRsvpRoutes(
         }
 
         // 3. Message length
-        if (message && (typeof message !== "string" || message.length > 1000)) {
+        if (safeMessage.length > 1000) {
           return new Response(JSON.stringify({ error: "Message too long (max 1000)" }), {
             status: 400,
             headers: { "Content-Type": "application/json" },
@@ -76,16 +113,16 @@ export async function handleRsvpRoutes(
         let existingRsvp = null;
         if (guest_id) {
           existingRsvp = await getRsvpByGuestId(env, guest_id);
-        } else if (name) {
-          existingRsvp = await getRsvpByName(env, name.trim());
+        } else if (safeName) {
+          existingRsvp = await getRsvpByName(env, safeName);
         }
 
         if (existingRsvp) {
           await updateRsvp(env, existingRsvp.id, {
-            name: name.trim(),
+            name: safeName,
             attendance,
             pax: numPax,
-            message: message?.trim(),
+            message: safeMessage || undefined,
             event_attendance: safeEventAttendance,
           });
           return new Response(JSON.stringify({ id: existingRsvp.id, updated: true }), {
@@ -95,10 +132,10 @@ export async function handleRsvpRoutes(
         }
 
         const newRsvp = await createRsvp(env, {
-          name: name.trim(),
+          name: safeName,
           attendance,
           pax: numPax,
-          message: message?.trim(),
+          message: safeMessage || undefined,
           guest_id: guest_id || undefined,
           event_attendance: safeEventAttendance,
         });
