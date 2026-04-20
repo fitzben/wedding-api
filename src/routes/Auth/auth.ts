@@ -1,5 +1,5 @@
 import { Env } from "../../index";
-import { findUserByEmail, verifyPassword, generateToken } from "../../services/authService";
+import { findUserByEmail, verifyPassword, generateToken, blacklistToken } from "../../services/authService";
 import { withAuth } from "../../middleware/auth";
 
 export const handleAuthRoutes = async (request: Request, url: URL, env: Env): Promise<Response> => {
@@ -57,6 +57,18 @@ export const handleAuthRoutes = async (request: Request, url: URL, env: Env): Pr
         headers: { "Content-Type": "application/json" },
       });
     }
+  }
+
+  if (pathname === "/api/auth/logout" && request.method === "POST") {
+    return withAuth(async (req, env) => {
+      const authHeader = req.headers.get("Authorization");
+      const token = authHeader!.split(" ")[1];
+      await blacklistToken(env.KV, token, 43200);
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    })(request, env);
   }
 
   if (pathname === "/api/auth/me" && request.method === "GET") {

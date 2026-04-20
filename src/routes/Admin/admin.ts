@@ -10,7 +10,7 @@ import { handleSettings } from "./handlers/settingsHandler";
 import { handleChangePassword } from "./handlers/passwordHandler";
 import { handleRsvpsAndWishes } from "./handlers/rsvpWishHandler";
 import { handleJourney } from "./handlers/journeyHandler";
-import { jsonError } from "./handlers/utils";
+import { jsonError, json } from "./handlers/utils";
 import { handlePermissions, getRolePermissions } from "./handlers/permissionHandler";
 
 export const handleAdminRoutes = async (
@@ -56,6 +56,7 @@ export const handleAdminRoutes = async (
         '/api/admin/settings',        // needed by useAdminGuests for WA template
         '/api/admin/guest-groups',    // needed by Guests page for group dropdown
         '/api/admin/users',           // needed by Guests page for "created by" filter
+        '/api/admin/guests/names',    // needed for duplicate detection
       ];
 
       if (
@@ -92,7 +93,7 @@ export const handleAdminRoutes = async (
 
     // Settings
     if (pathname === "/api/admin/settings") {
-      return handleSettings(req, env, method, pathname);
+      return handleSettings(req, env, user, method, pathname);
     }
 
     // Users
@@ -128,6 +129,25 @@ export const handleAdminRoutes = async (
     // Permissions
     if (pathname.startsWith("/api/admin/permissions")) {
       return handlePermissions(req, env, user, method, pathname);
+    }
+
+    // Audit Logs (admin only)
+    if (pathname.startsWith("/api/admin/audit-logs") && method === "GET") {
+      if (user.role !== "admin") return jsonError("Forbidden", 403);
+      const page = parseInt(url.searchParams.get("page") || "1");
+      const limit = parseInt(url.searchParams.get("limit") || "50");
+      const offset = (page - 1) * limit;
+      try {
+        const [rows, countRow] = await Promise.all([
+          env.DB.prepare(
+            "SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?"
+          ).bind(limit, offset).all(),
+          env.DB.prepare("SELECT COUNT(*) as total FROM audit_logs").first<{ total: number }>(),
+        ]);
+        return json({ data: rows.results, total: countRow?.total || 0, page });
+      } catch {
+        return jsonError("Failed to fetch audit logs", 500);
+      }
     }
 
     return jsonError("Not Found", 404);

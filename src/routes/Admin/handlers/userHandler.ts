@@ -2,6 +2,7 @@ import { Env } from "../../../index";
 import { json, jsonError } from "./utils";
 import { hashPassword } from "../../../services/authService";
 import { JWTPayload } from "../../../utils/jwt";
+import { writeAuditLog } from "../../../services/auditService";
 
 export async function handleUsers(
   req: Request,
@@ -26,6 +27,7 @@ export async function handleUsers(
         const id = crypto.randomUUID();
         await env.DB.prepare("INSERT INTO admin_users (id, name, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))")
           .bind(id, name, email, await hashPassword(password), role).run();
+        writeAuditLog(env, user, "user.create", "users", { resource_id: id, detail: name, request: req });
         return json({ id, name, email, role }, 201);
       } catch (e: any) {
         if (e?.message?.includes("UNIQUE")) return jsonError("Email already in use", 409);
@@ -49,7 +51,9 @@ export async function handleUsers(
           await env.DB.prepare("UPDATE admin_users SET name=COALESCE(?1,name), email=COALESCE(?2,email), role=COALESCE(?3,role), updated_at=datetime('now') WHERE id=?4")
             .bind(name||null, email||null, role||null, id).run();
         }
-        return json(await env.DB.prepare("SELECT id, name, email, role FROM admin_users WHERE id = ?").bind(id).first());
+        const updated = await env.DB.prepare("SELECT id, name, email, role FROM admin_users WHERE id = ?").bind(id).first();
+        writeAuditLog(env, user, "user.update", "users", { resource_id: id, request: req });
+        return json(updated);
       } catch { return jsonError("Failed to update user", 500); }
     }
     if (method === "DELETE") {
@@ -57,6 +61,7 @@ export async function handleUsers(
         if (id === user.user_id) return jsonError("Cannot delete your own account", 400);
         if (!await env.DB.prepare("SELECT id FROM admin_users WHERE id = ?").bind(id).first()) return jsonError("User not found", 404);
         await env.DB.prepare("DELETE FROM admin_users WHERE id = ?").bind(id).run();
+        writeAuditLog(env, user, "user.delete", "users", { resource_id: id, request: req });
         return new Response(null, { status: 204 });
       } catch { return jsonError("Failed to delete user", 500); }
     }

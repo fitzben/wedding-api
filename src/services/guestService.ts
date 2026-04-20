@@ -287,14 +287,22 @@ export async function getGuestBySlug(
   // Add invite_url
   result.invite_url = `https://benelin.my.id/invite/${slug}`;
 
-  // Update visited_at if NULL
+  // Update visit analytics
+  const now = new Date().toISOString();
   if (!result.visited_at) {
-    const now = new Date().toISOString();
-    await env.DB.prepare("UPDATE guests SET visited_at = ? WHERE id = ?")
-      .bind(now, result.id)
-      .run();
+    // First visit
+    await env.DB.prepare(
+      "UPDATE guests SET visited_at = ?, last_visited_at = ?, visit_count = 1 WHERE id = ?"
+    ).bind(now, now, result.id).run();
     result.visited_at = now;
+  } else {
+    // Subsequent visits
+    await env.DB.prepare(
+      "UPDATE guests SET last_visited_at = ?, visit_count = COALESCE(visit_count, 0) + 1 WHERE id = ?"
+    ).bind(now, result.id).run();
   }
+  result.visit_count = (result.visit_count || 0) + 1;
+  result.last_visited_at = now;
 
   return result;
 }

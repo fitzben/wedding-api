@@ -14,7 +14,7 @@ export const signToken = async (payload: JWTPayload, secret: string): Promise<st
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("24h")
+    .setExpirationTime("12h")
     .sign(secretKey);
 };
 

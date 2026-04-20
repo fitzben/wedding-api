@@ -14,6 +14,7 @@ import { withSecurityHeaders } from "./utils/security";
 export interface Env {
   DB: D1Database;
   MEDIA_BUCKET: R2Bucket;
+  KV: KVNamespace;
   JWT_SECRET: string;
   R2_PUBLIC_URL: string;
   R2_ACCOUNT_ID: string;
