@@ -19,13 +19,21 @@ export async function handleGiftsRoutes(
           COALESCE(
             (SELECT SUM(c.quantity) FROM gift_registry_claims c WHERE c.registry_id = r.id),
             0
-          ) AS quantity_claimed
+          ) AS quantity_claimed,
+          COALESCE(
+            (SELECT json_group_array(claimer_name) FROM gift_registry_claims WHERE registry_id = r.id),
+            '[]'
+          ) AS claimer_names
         FROM gift_registry r
         WHERE r.deleted_at IS NULL AND r.is_active = 1
         ORDER BY r.sort_order ASC, r.created_at ASC
       `,
       ).all();
-      return res({ items: rows.results });
+      const items = rows.results.map((row: any) => ({
+        ...row,
+        claimer_names: JSON.parse(row.claimer_names || "[]"),
+      }));
+      return res({ items });
     } catch {
       return res({ error: "Failed to fetch registry" }, 500);
     }
