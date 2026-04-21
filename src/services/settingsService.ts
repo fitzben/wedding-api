@@ -35,6 +35,13 @@ const PUBLIC_KEYS = [
   "dress_code_colors",
   "dress_code_theme",
   "dress_code_notes",
+  // Bank account
+  "bride_bank_name",
+  "bride_bank_account",
+  "bride_bank_account_name",
+  "groom_bank_name",
+  "groom_bank_account",
+  "groom_bank_account_name",
 ];
 
 export async function getPublicSettings(
