@@ -27,7 +27,9 @@ export async function getGuestsPaginated(
   const offset = (page - 1) * limit;
 
   // Build the WHERE clause dynamically
-  let whereClause = show_deleted ? "WHERE 1=1" : "WHERE deleted_at IS NULL";
+  let whereClause = show_deleted
+    ? "WHERE deleted_at IS NOT NULL"
+    : "WHERE deleted_at IS NULL";
   const bindParams: any[] = [];
 
   if (search) {
@@ -261,6 +263,17 @@ export async function editGuest(
   return result;
 }
 
+export async function getGuestByPhone(
+  env: Env,
+  phone: string,
+): Promise<{ id: string } | null> {
+  return await env.DB.prepare(
+    "SELECT id FROM guests WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1",
+  )
+    .bind(phone)
+    .first<{ id: string }>();
+}
+
 export async function getGuestBySlug(
   env: Env,
   slug: string,
@@ -292,14 +305,18 @@ export async function getGuestBySlug(
   if (!result.visited_at) {
     // First visit
     await env.DB.prepare(
-      "UPDATE guests SET visited_at = ?, last_visited_at = ?, visit_count = 1 WHERE id = ?"
-    ).bind(now, now, result.id).run();
+      "UPDATE guests SET visited_at = ?, last_visited_at = ?, visit_count = 1 WHERE id = ?",
+    )
+      .bind(now, now, result.id)
+      .run();
     result.visited_at = now;
   } else {
     // Subsequent visits
     await env.DB.prepare(
-      "UPDATE guests SET last_visited_at = ?, visit_count = COALESCE(visit_count, 0) + 1 WHERE id = ?"
-    ).bind(now, result.id).run();
+      "UPDATE guests SET last_visited_at = ?, visit_count = COALESCE(visit_count, 0) + 1 WHERE id = ?",
+    )
+      .bind(now, result.id)
+      .run();
   }
   result.visit_count = (result.visit_count || 0) + 1;
   result.last_visited_at = now;
