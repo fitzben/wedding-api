@@ -31,7 +31,7 @@ export function withCORS(response: Response, request?: Request): Response {
     newResponse.headers.set("Access-Control-Allow-Origin", "https://benelin.my.id");
   }
   
-  newResponse.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  newResponse.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   newResponse.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
   return newResponse;

@@ -5,6 +5,7 @@ import {
   editGuest,
   deleteGuest,
   getGuestsPaginated,
+  getGuestByPhone,
 } from "../../../services/guestService";
 import { JWTPayload } from "../../../utils/jwt";
 import { writeAuditLog } from "../../../services/auditService";
@@ -184,6 +185,15 @@ export async function handleGuests(
             continue;
           }
 
+          // Check duplicate by phone number
+          const normalised = normalisePhone(row.phone_number);
+          const existing = await getGuestByPhone(env, normalised);
+          if (existing) {
+            importResults.failed++;
+            importResults.errors.push(`Row ${i}: phone ${normalised} already exists (skipped)`);
+            continue;
+          }
+
           const validInviteTypes = ["digital", "physical", "both"];
           await createGuest(env, {
             first_name: row.first_name,
@@ -307,6 +317,29 @@ export async function handleGuests(
         return json(updated);
       } catch {
         return jsonError("Failed to update guest", 500);
+      }
+    }
+    if (method === "PATCH" && pathname.endsWith("/mark-invited")) {
+      try {
+        const body = (await req.json()) as any;
+        const status = body?.status;
+        const validStatuses = ["sent", "pending"];
+        if (!status || !validStatuses.includes(status)) {
+          return jsonError("status must be 'sent' or 'pending'", 400);
+        }
+        const updated = await editGuest(env, id, {
+          invite_status: status,
+          updated_by: user.user_id,
+        });
+        if (!updated) return jsonError("Guest not found", 404);
+        writeAuditLog(env, user, "guest.mark_invited", "guests", {
+          resource_id: id,
+          detail: `invite_status → ${status}`,
+          request: req,
+        });
+        return json({ id, invite_status: status });
+      } catch {
+        return jsonError("Failed to update invite status", 500);
       }
     }
     if (method === "DELETE") {
