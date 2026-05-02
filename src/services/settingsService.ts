@@ -4,8 +4,14 @@ import type { Env } from "../index";
 const PUBLIC_KEYS = [
   "bride_name",
   "bride_nickname",
+  "bride_father",
+  "bride_mother",
+  "bride_child_order",
   "groom_name",
   "groom_nickname",
+  "groom_father",
+  "groom_mother",
+  "groom_child_order",
   "hm_date",
   "hm_time_start",
   "hm_time_end",
@@ -25,6 +31,7 @@ const PUBLIC_KEYS = [
   "wishes_enabled",
   "maintenance_mode",
   "journey_background",
+  "couple_quote",
   // Live streaming
   "stream_url",
   "stream_label",

@@ -1,5 +1,6 @@
 import { Env } from "../../../index";
 import { json, jsonError, normalisePhone } from "./utils";
+import * as XLSX from "xlsx";
 import {
   createGuest,
   editGuest,
@@ -144,44 +145,96 @@ export async function handleGuests(
       const file = formData.get("file") as File;
       if (!file) return jsonError("No file uploaded", 400);
 
-      const text = await file.text();
-      const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-      if (lines.length < 2)
-        return jsonError("CSV must have header and at least one row", 400);
+      const fileName = file.name?.toLowerCase() || "";
+      const isXlsx = fileName.endsWith(".xlsx") || fileName.endsWith(".xls");
 
-      const rawHeader = lines[0]
-        .split(",")
-        .map((h) => h.replace(/"/g, "").trim().toLowerCase());
-      const required = ["first_name", "last_name", "phone_number"];
-      for (const r of required) {
-        if (!rawHeader.includes(r))
-          return jsonError(`Missing required column: ${r}`, 400);
-      }
+      let rows: Record<string, string>[] = [];
 
-      const importResults = { success: 0, failed: 0, errors: [] as string[] };
+      if (isXlsx) {
+        // Parse XLSX — ambil sheet pertama saja (sheet template input)
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, {
+          defval: "",
+          raw: false,
+        });
 
-      for (let i = 1; i < lines.length; i++) {
-        try {
+        if (jsonData.length === 0)
+          return jsonError("Sheet pertama kosong atau tidak ada data", 400);
+
+        // Normalize header keys to lowercase
+        rows = jsonData.map((row) => {
+          const normalized: Record<string, string> = {};
+          for (const key of Object.keys(row)) {
+            normalized[key.toLowerCase().trim()] = String(row[key] ?? "").trim();
+          }
+          return normalized;
+        });
+      } else {
+        // Parse CSV
+        const text = await file.text();
+        const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+        if (lines.length < 2)
+          return jsonError("CSV must have header and at least one row", 400);
+
+        const rawHeader = lines[0]
+          .split(",")
+          .map((h) => h.replace(/"/g, "").trim().toLowerCase());
+
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          // Skip comment lines (referensi master data)
+          if (line.startsWith('"#') || line.startsWith("#")) continue;
+
           const values: string[] = [];
           let current = "";
           let inQuotes = false;
-          for (const char of lines[i]) {
+          for (const char of line) {
             if (char === '"') { inQuotes = !inQuotes; continue; }
-            if (char === "," && !inQuotes) {
-              values.push(current.trim());
-              current = "";
-              continue;
-            }
+            if (char === "," && !inQuotes) { values.push(current.trim()); current = ""; continue; }
             current += char;
           }
           values.push(current.trim());
 
           const row: Record<string, string> = {};
           rawHeader.forEach((h, idx) => { row[h] = values[idx] || ""; });
+          if (row.first_name || row.last_name || row.phone_number) {
+            rows.push(row);
+          }
+        }
+
+        if (rows.length === 0)
+          return jsonError("CSV must have header and at least one data row", 400);
+      }
+
+      // Validate required columns
+      const required = ["first_name", "last_name", "phone_number"];
+      const sampleRow = rows[0];
+      for (const r of required) {
+        if (!(r in sampleRow))
+          return jsonError(`Missing required column: ${r}`, 400);
+      }
+
+      const importResults = { success: 0, failed: 0, errors: [] as string[] };
+
+      // Load all guest groups once for name → id resolution
+      const { results: groupResults } = await env.DB.prepare(
+        "SELECT id, name FROM guest_groups WHERE deleted_at IS NULL"
+      ).all<{ id: string; name: string }>();
+
+      const groupMap = new Map<string, string>();
+      for (const g of groupResults) {
+        groupMap.set(g.name.toLowerCase().trim(), g.id);
+      }
+
+      for (const [i, row] of rows.entries()) {
+        try {
 
           if (!row.first_name || !row.last_name || !row.phone_number) {
             importResults.failed++;
-            importResults.errors.push(`Row ${i}: missing required fields`);
+            importResults.errors.push(`Row ${i + 1}: missing required fields`);
             continue;
           }
 
@@ -190,8 +243,14 @@ export async function handleGuests(
           const existing = await getGuestByPhone(env, normalised);
           if (existing) {
             importResults.failed++;
-            importResults.errors.push(`Row ${i}: phone ${normalised} already exists (skipped)`);
+            importResults.errors.push(`Row ${i + 1}: phone ${normalised} already exists (skipped)`);
             continue;
+          }
+
+          // Resolve guest_group_name to guest_group_id
+          let resolvedGroupId: string | null = null;
+          if (row.guest_group_name?.trim()) {
+            resolvedGroupId = groupMap.get(row.guest_group_name.toLowerCase().trim()) || null;
           }
 
           const validInviteTypes = ["digital", "physical", "both"];
@@ -201,12 +260,16 @@ export async function handleGuests(
             phone_number: normalisePhone(row.phone_number),
             display_name: row.display_name || undefined,
             pax_allowed: parseInt(row.pax_allowed) || 1,
+            category: ["friend", "colleague", "family"].includes(row.category)
+              ? row.category : "friend",
+            priority: ["low", "medium", "high"].includes(row.priority)
+              ? row.priority : "medium",
+            importance: ["normal", "vip", "vvip"].includes(row.importance)
+              ? row.importance : "normal",
             invitation_type: validInviteTypes.includes(row.invitation_type)
-              ? row.invitation_type
-              : "digital",
-            category: "friend",
-            priority: "medium",
-            importance: "normal",
+              ? row.invitation_type : "digital",
+            guest_group_id: resolvedGroupId,
+            notes: row.notes?.trim() || null,
             created_by: user.user_id,
             updated_by: user.user_id,
             enable_display_name: !!row.display_name,
@@ -214,7 +277,7 @@ export async function handleGuests(
           importResults.success++;
         } catch (e: any) {
           importResults.failed++;
-          importResults.errors.push(`Row ${i}: ${e.message}`);
+          importResults.errors.push(`Row ${i + 1}: ${e.message}`);
         }
       }
 
