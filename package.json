@@ -14,7 +14,8 @@
 		"@aws-sdk/s3-request-presigner": "^3.1013.0",
 		"bcryptjs": "^2.4.3",
 		"jose": "^5.9.6",
-		"tslib": "^2.8.1"
+		"tslib": "^2.8.1",
+		"xlsx": "^0.18.5"
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.12.4",
