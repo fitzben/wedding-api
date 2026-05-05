@@ -64,6 +64,7 @@ export async function handleGuests(
           event_access_override,
           display_name,
           enable_display_name,
+          is_verified,
         } = body ?? {};
         if (!first_name || !last_name || !phone_number)
           return jsonError(
@@ -92,6 +93,7 @@ export async function handleGuests(
             updated_by: user.user_id,
             display_name: display_name,
             enable_display_name: !!enable_display_name,
+            is_verified: !!is_verified,
           });
         writeAuditLog(env, user, "guest.create", "guests", {
           resource_id: (result as any).id,
@@ -372,6 +374,9 @@ export async function handleGuests(
         }
         if (body.enable_display_name !== undefined) {
           body.enable_display_name = !!body.enable_display_name;
+        }
+        if (body.is_verified !== undefined) {
+          body.is_verified = !!body.is_verified;
         }
         body.updated_by = user.user_id;
         const updated = await editGuest(env, id, body);

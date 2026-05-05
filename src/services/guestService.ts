@@ -117,6 +117,7 @@ type CreateGuestInput = {
   updated_by?: string | null;
   display_name?: string | null;
   enable_display_name?: boolean;
+  is_verified?: boolean;
 };
 
 async function ensureUniqueSlug(db: D1Database, slug: string): Promise<string> {
@@ -150,6 +151,7 @@ export async function createGuest(
     created_by = null,
     updated_by = null,
     enable_display_name = false,
+    is_verified = false,
   } = input;
 
   const id = crypto.randomUUID();
@@ -165,10 +167,11 @@ export async function createGuest(
   await env.DB.prepare(
     `INSERT INTO guests (
       id, first_name, last_name, phone_number, display_name, slug,
-      category, priority, importance, pax_allowed, invite_status, rsvp_status,
-      notes, guest_group_id, invitation_type, event_access_override,
-      created_by, updated_by, created_at, enable_display_name
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      category, priority, importance, pax_allowed, invite_status,
+      rsvp_status, notes, guest_group_id, invitation_type,
+      event_access_override, created_by, updated_by, created_at,
+      enable_display_name, is_verified
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -191,6 +194,7 @@ export async function createGuest(
       updated_by,
       created_at,
       enable_display_name ? 1 : 0,
+      is_verified ? 1 : 0,
     )
     .run();
 
@@ -236,6 +240,7 @@ export async function editGuest(
     "event_access_override",
     "updated_by",
     "enable_display_name",
+    "is_verified",
   ];
 
   const updated_at = new Date().toISOString();
@@ -247,7 +252,14 @@ export async function editGuest(
 
   const fields = [...keys, "updated_at"];
   const setClause = fields.map((k) => `${k} = ?`).join(", ");
-  const values = [...keys.map((k) => (updates as any)[k]), updated_at];
+  const values = [
+    ...keys.map((k) => {
+      const val = (updates as any)[k];
+      if (typeof val === "boolean") return val ? 1 : 0;
+      return val;
+    }),
+    updated_at,
+  ];
 
   await env.DB.prepare(
     `UPDATE guests SET ${setClause} WHERE id = ? AND deleted_at IS NULL`,
