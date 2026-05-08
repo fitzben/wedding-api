@@ -33,6 +33,8 @@ export async function handleGuests(
           url.searchParams.get("guest_group_id") || "";
         const filter_invitation_type =
           url.searchParams.get("invitation_type") || "";
+        const filter_invite_status =
+          url.searchParams.get("invite_status") || "";
         return json(
           await getGuestsPaginated(env, page, limit, search, show_deleted, {
             category: filter_category,
@@ -40,6 +42,7 @@ export async function handleGuests(
             importance: filter_importance,
             guest_group_id: filter_guest_group_id,
             invitation_type: filter_invitation_type,
+            invite_status: filter_invite_status,
             created_by: url.searchParams.get("created_by") || undefined,
           }),
         );
