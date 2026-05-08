@@ -391,6 +391,11 @@ export async function handleGuests(
       }
     }
     if (method === "PATCH" && pathname.endsWith("/mark-invited")) {
+      // Re-parse ID: extract UUID from path, not the last segment
+      const segments = pathname.split("/");
+      const markInvitedIndex = segments.indexOf("mark-invited");
+      const guestId = markInvitedIndex > 0 ? segments[markInvitedIndex - 1] : id;
+
       try {
         const body = (await req.json()) as any;
         const status = body?.status;
@@ -398,17 +403,17 @@ export async function handleGuests(
         if (!status || !validStatuses.includes(status)) {
           return jsonError("status must be 'sent' or 'pending'", 400);
         }
-        const updated = await editGuest(env, id, {
+        const updated = await editGuest(env, guestId, {
           invite_status: status,
           updated_by: user.user_id,
         });
         if (!updated) return jsonError("Guest not found", 404);
         writeAuditLog(env, user, "guest.mark_invited", "guests", {
-          resource_id: id,
+          resource_id: guestId,
           detail: `invite_status → ${status}`,
           request: req,
         });
-        return json({ id, invite_status: status });
+        return json({ id: guestId, invite_status: status });
       } catch {
         return jsonError("Failed to update invite status", 500);
       }
