@@ -16,11 +16,8 @@ export async function getGuestsPaginated(
   search: string = "",
   show_deleted: boolean = false,
   filters: {
-    category?: string;
-    priority?: string;
-    importance?: string;
-    guest_group_id?: string;
     invitation_type?: string;
+    invite_status?: string;
     created_by?: string;
   } = {},
 ): Promise<{ data: Guest[]; total: number; page: number }> {
@@ -57,6 +54,10 @@ export async function getGuestsPaginated(
     whereClause += " AND invitation_type = ?";
     bindParams.push(filters.invitation_type);
   }
+  if (filters.invite_status) {
+    whereClause += " AND invite_status = ?";
+    bindParams.push(filters.invite_status);
+  }
   if (filters.created_by) {
     whereClause += " AND created_by = ?";
     bindParams.push(filters.created_by);
@@ -73,6 +74,7 @@ export async function getGuestsPaginated(
     .replace(/importance/g, "g.importance")
     .replace(/guest_group_id/g, "g.guest_group_id")
     .replace(/invitation_type/g, "g.invitation_type")
+    .replace(/invite_status/g, "g.invite_status")
     .replace(/\bcreated_by\b/g, "g.created_by");
 
   const totalResult = await env.DB.prepare(
@@ -161,7 +163,7 @@ export async function createGuest(
   const baseSlug = generateSlug(display_name);
   const slug = await ensureUniqueSlug(env.DB, baseSlug);
 
-  const invite_status = "invited";
+  const invite_status = "pending";
   const rsvp_status = "pending";
 
   await env.DB.prepare(
