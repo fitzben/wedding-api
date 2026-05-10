@@ -156,7 +156,7 @@ export async function handleGuests(
       let rows: Record<string, string>[] = [];
 
       if (isXlsx) {
-        // Parse XLSX — ambil sheet pertama saja (sheet template input)
+        // Parse XLSX — ambil sheet pertama saja
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: "array" });
         const firstSheetName = workbook.SheetNames[0];
@@ -169,14 +169,17 @@ export async function handleGuests(
         if (jsonData.length === 0)
           return jsonError("Sheet pertama kosong atau tidak ada data", 400);
 
-        // Normalize header keys to lowercase
-        rows = jsonData.map((row) => {
-          const normalized: Record<string, string> = {};
-          for (const key of Object.keys(row)) {
-            normalized[key.toLowerCase().trim()] = String(row[key] ?? "").trim();
-          }
-          return normalized;
-        });
+        rows = jsonData
+          .map((row) => {
+            const normalized: Record<string, string> = {};
+            for (const key of Object.keys(row)) {
+              normalized[key.toLowerCase().trim()] = String(row[key] ?? "").trim();
+            }
+            return normalized;
+          })
+          // Skip baris yang first_name kosong (bisa jadi baris contoh atau kosong)
+          .filter((r) => r.first_name?.trim());
+
       } else {
         // Parse CSV
         const text = await file.text();
@@ -205,18 +208,18 @@ export async function handleGuests(
 
           const row: Record<string, string> = {};
           rawHeader.forEach((h, idx) => { row[h] = values[idx] || ""; });
-          if (row.first_name || row.last_name || row.phone_number) {
+          if (row.first_name?.trim()) {
             rows.push(row);
           }
         }
 
         if (rows.length === 0)
-          return jsonError("CSV must have header and at least one data row", 400);
+          return jsonError("Tidak ada data valid di file", 400);
       }
 
-      // Validate required columns
-      const required = ["first_name", "last_name", "phone_number"];
+      // Validate required columns dari sample row pertama
       const sampleRow = rows[0];
+      const required = ["first_name", "last_name"];
       for (const r of required) {
         if (!(r in sampleRow))
           return jsonError(`Missing required column: ${r}`, 400);
@@ -237,19 +240,21 @@ export async function handleGuests(
       for (const [i, row] of rows.entries()) {
         try {
 
-          if (!row.first_name || !row.last_name || !row.phone_number) {
+          if (!row.first_name || !row.last_name) {
             importResults.failed++;
-            importResults.errors.push(`Row ${i + 1}: missing required fields`);
+            importResults.errors.push(`Row ${i + 1}: first_name and last_name are required`);
             continue;
           }
 
-          // Check duplicate by phone number
-          const normalised = normalisePhone(row.phone_number);
-          const existing = await getGuestByPhone(env, normalised);
-          if (existing) {
-            importResults.failed++;
-            importResults.errors.push(`Row ${i + 1}: phone ${normalised} already exists (skipped)`);
-            continue;
+          // Check duplicate by phone only if provided
+          if (row.phone_number?.trim()) {
+            const normalised = normalisePhone(row.phone_number);
+            const existing = await getGuestByPhone(env, normalised);
+            if (existing) {
+              importResults.failed++;
+              importResults.errors.push(`Row ${i + 1}: phone ${normalised} already exists (skipped)`);
+              continue;
+            }
           }
 
           // Resolve guest_group_name to guest_group_id
@@ -262,7 +267,9 @@ export async function handleGuests(
           await createGuest(env, {
             first_name: row.first_name,
             last_name: row.last_name,
-            phone_number: normalisePhone(row.phone_number),
+            phone_number: row.phone_number?.trim()
+              ? normalisePhone(row.phone_number)
+              : "",
             display_name: row.display_name || undefined,
             pax_allowed: parseInt(row.pax_allowed) || 1,
             category: ["friend", "colleague", "family"].includes(row.category)
