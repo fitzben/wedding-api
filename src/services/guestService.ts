@@ -247,6 +247,7 @@ export async function editGuest(
     "updated_by",
     "enable_display_name",
     "is_verified",
+    "slug",
   ];
 
   const updated_at = new Date().toISOString();
