@@ -297,5 +297,55 @@ export async function handleGallery(
     }
   }
 
+  // ── DRESS CODE PHOTOS — upload URL ──────────────────────────────────────────
+  if (pathname === "/api/admin/dresscode/upload-url" && method === "POST") {
+    try {
+      const { filename, content_type } = ((await req.json()) as any) ?? {};
+      if (!filename || !content_type)
+        return jsonError("filename and content_type required", 400);
+
+      const ext = filename.split(".").pop();
+      const key = `dresscode/${crypto.randomUUID()}.${ext}`;
+
+      const s3Client = new S3Client({
+        region: "auto",
+        endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: env.R2_ACCESS_KEY_ID,
+          secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        },
+      });
+
+      const uploadUrl = await getSignedUrl(
+        s3Client,
+        new PutObjectCommand({
+          Bucket: "wedding-bucket",
+          Key: key,
+          ContentType: content_type,
+        }),
+        { expiresIn: 3600 },
+      );
+
+      const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
+      return json({ upload_url: uploadUrl, public_url: publicUrl, key });
+    } catch {
+      return jsonError("Failed to generate upload URL", 500);
+    }
+  }
+
+  // ── DRESS CODE PHOTOS — delete ────────────────────────────────────────────────
+  if (pathname === "/api/admin/dresscode/delete-photo" && method === "POST") {
+    try {
+      const { key } = ((await req.json()) as any) ?? {};
+      if (!key) return jsonError("key required", 400);
+      // Only allow deleting dresscode/ prefix keys
+      if (!key.startsWith("dresscode/")) return jsonError("Invalid key", 400);
+      await env.MEDIA_BUCKET.delete(key);
+      return json({ ok: true });
+    } catch {
+      return jsonError("Failed to delete photo", 500);
+    }
+  }
+
   return jsonError("Not Found", 404);
 }

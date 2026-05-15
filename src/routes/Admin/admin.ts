@@ -56,14 +56,19 @@ export const handleAdminRoutes = async (
         '/api/admin/settings',        // needed by useAdminGuests for WA template
         '/api/admin/guest-groups',    // needed by Guests page for group dropdown
         '/api/admin/users',           // needed by Guests page for "created by" filter
-        '/api/admin/guests/names',    // needed for duplicate detection
+      ];
+
+      const IMPORT_EXPORT_PATHS = [
+        '/api/admin/guests/import',
+        '/api/admin/guests/export',
+        '/api/admin/guests/names',
       ];
 
       if (
-        method === 'GET' &&
-        SHARED_READONLY_PATHS.some(p => pathname.startsWith(p))
+        (method === 'GET' && SHARED_READONLY_PATHS.some(p => pathname.startsWith(p))) ||
+        IMPORT_EXPORT_PATHS.some(p => pathname === p)
       ) {
-        // Allow read-only access — fall through to handler below
+        // Allow — role check dilakukan di handler
       } else {
         const resource = getResource(pathname);
         if (!resource || !perms[resource]) {
@@ -104,6 +109,11 @@ export const handleAdminRoutes = async (
     // Change Password
     if (pathname === "/api/admin/change-password" && method === "POST") {
       return handleChangePassword(req, env, user);
+    }
+
+    // Dress Code
+    if (pathname.startsWith("/api/admin/dresscode")) {
+      return handleGallery(req, url, env, method, pathname);
     }
 
     // Gallery
