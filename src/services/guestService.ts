@@ -16,6 +16,10 @@ export async function getGuestsPaginated(
   search: string = "",
   show_deleted: boolean = false,
   filters: {
+    category?: string;
+    priority?: string;
+    importance?: string;
+    guest_group_id?: string;
     invitation_type?: string;
     invite_status?: string;
     created_by?: string;

@@ -142,7 +142,7 @@ export async function handleGuests(
   }
 
   if (pathname === "/api/admin/guests/import" && method === "POST") {
-    if (user.role !== "admin" && user.role !== "partner") {
+    if (!["admin", "partner", "parents"].includes(user.role)) {
       return jsonError("Forbidden", 403);
     }
     try {

@@ -421,6 +421,39 @@ export async function handleGifts(
         return jsonError("Failed to delete registry item", 500);
       }
     }
+
+    // Revoke a specific claim
+    if (pathname.includes("/claims/") && method === "DELETE") {
+      try {
+        const parts = pathname.split("/");
+        const claimId = parts[parts.length - 1];
+        const regId = parts[parts.indexOf("registry") + 1];
+
+        // Get claim details before deleting (to update quantity_claimed)
+        const claim = await env.DB.prepare(
+          "SELECT * FROM gift_registry_claims WHERE id = ? AND registry_id = ?"
+        ).bind(claimId, regId).first<any>();
+
+        if (!claim) return jsonError("Claim not found", 404);
+
+        // Delete the claim
+        await env.DB.prepare(
+          "DELETE FROM gift_registry_claims WHERE id = ?"
+        ).bind(claimId).run();
+
+        // Update quantity_claimed on registry item
+        await env.DB.prepare(
+          `UPDATE gift_registry
+           SET quantity_claimed = MAX(0, COALESCE(quantity_claimed, 0) - ?),
+               updated_at = datetime('now')
+           WHERE id = ?`
+        ).bind(claim.quantity || 1, regId).run();
+
+        return new Response(null, { status: 204 });
+      } catch {
+        return jsonError("Failed to revoke claim", 500);
+      }
+    }
   }
 
   return jsonError("Not Found", 404);
