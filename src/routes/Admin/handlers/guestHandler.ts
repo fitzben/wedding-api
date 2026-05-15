@@ -388,6 +388,17 @@ export async function handleGuests(
         if (body.is_verified !== undefined) {
           body.is_verified = !!body.is_verified;
         }
+        if (body.slug !== undefined) {
+          if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug)) {
+            return jsonError("Slug hanya boleh huruf kecil, angka, dan tanda hubung (-)", 400);
+          }
+          const existing = await env.DB.prepare(
+            "SELECT id FROM guests WHERE slug = ? AND id != ? AND deleted_at IS NULL"
+          ).bind(body.slug, id).first();
+          if (existing) {
+            return jsonError("Slug sudah digunakan oleh tamu lain", 409);
+          }
+        }
         body.updated_by = user.user_id;
         const updated = await editGuest(env, id, body);
         if (!updated) return jsonError("Guest not found", 404);
