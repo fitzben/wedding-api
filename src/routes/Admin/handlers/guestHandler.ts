@@ -436,6 +436,33 @@ export async function handleGuests(
         return jsonError("Failed to update invite status", 500);
       }
     }
+    if (method === "POST" && pathname.endsWith("/restore")) {
+      const segments = pathname.split("/");
+      const restoreIndex = segments.indexOf("restore");
+      const guestId = restoreIndex > 0 ? segments[restoreIndex - 1] : id;
+
+      try {
+        const guest = await env.DB.prepare(
+          "SELECT id, display_name FROM guests WHERE id = ? AND deleted_at IS NOT NULL"
+        ).bind(guestId).first<any>();
+
+        if (!guest) return jsonError("Guest not found or not deleted", 404);
+
+        await env.DB.prepare(
+          "UPDATE guests SET deleted_at = NULL, deleted_by = NULL, updated_at = datetime('now') WHERE id = ?"
+        ).bind(guestId).run();
+
+        writeAuditLog(env, user, "guest.restore", "guests", {
+          resource_id: guestId,
+          detail: guest.display_name,
+          request: req,
+        });
+
+        return json({ id: guestId, restored: true });
+      } catch {
+        return jsonError("Failed to restore guest", 500);
+      }
+    }
     if (method === "DELETE") {
       try {
         if (!(await deleteGuest(env, id, user.user_id)))

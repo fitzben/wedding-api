@@ -34,8 +34,8 @@ export async function getGuestsPaginated(
   const bindParams: any[] = [];
 
   if (search) {
-    whereClause += " AND (display_name LIKE ? OR phone_number LIKE ?)";
-    bindParams.push(`%${search}%`, `%${search}%`);
+    whereClause += " AND (display_name LIKE ? OR phone_number LIKE ? OR first_name LIKE ? OR last_name LIKE ? OR (first_name || ' ' || last_name) LIKE ?)";
+    bindParams.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
   }
 
   if (filters.category) {
@@ -73,6 +73,8 @@ export async function getGuestsPaginated(
     .replace(/deleted_at/g, "g.deleted_at")
     .replace(/display_name/g, "g.display_name")
     .replace(/phone_number/g, "g.phone_number")
+    .replace(/\bfirst_name\b/g, "g.first_name")
+    .replace(/\blast_name\b/g, "g.last_name")
     .replace(/category/g, "g.category")
     .replace(/priority/g, "g.priority")
     .replace(/importance/g, "g.importance")
