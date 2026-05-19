@@ -262,6 +262,7 @@ export async function handleGifts(
           price_range,
           shop_url,
           is_active,
+          delivery_address,
         } = body;
 
         if (!name?.trim()) return jsonError("name is required", 400);
@@ -276,8 +277,8 @@ export async function handleGifts(
           INSERT INTO gift_registry (
             id, name, brand, description, image_url,
             tag, quantity_needed, price_range, shop_url,
-            is_active, sort_order, created_at, updated_at
-          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
+            is_active, sort_order, delivery_address, created_at, updated_at
+          ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))
         `,
         )
           .bind(
@@ -292,6 +293,7 @@ export async function handleGifts(
             shop_url?.trim() || null,
             is_active !== undefined ? (is_active ? 1 : 0) : 1,
             maxOrder.next,
+            delivery_address?.trim() || null,
           )
           .run();
 
@@ -321,6 +323,41 @@ export async function handleGifts(
       return json({ ok: true });
     } catch {
       return jsonError("Failed to reorder registry", 500);
+    }
+  }
+
+  // Handle claims routes FIRST — before single registry item handler
+  if (pathname.includes("/claims/") && method === "DELETE") {
+    try {
+      const parts = pathname.split("/");
+      // path: /api/admin/gifts/registry/:registryId/claims/:claimId
+      const registryIdx = parts.indexOf("registry");
+      const claimsIdx = parts.indexOf("claims");
+      const regId = parts[registryIdx + 1];
+      const claimId = parts[claimsIdx + 1];
+
+      if (!regId || !claimId) return jsonError("Invalid path", 400);
+
+      const claim = await env.DB.prepare(
+        "SELECT * FROM gift_registry_claims WHERE id = ? AND registry_id = ?"
+      ).bind(claimId, regId).first<any>();
+
+      if (!claim) return jsonError("Claim not found", 404);
+
+      await env.DB.prepare(
+        "DELETE FROM gift_registry_claims WHERE id = ?"
+      ).bind(claimId).run();
+
+      await env.DB.prepare(
+        `UPDATE gift_registry
+         SET quantity_claimed = MAX(0, COALESCE(quantity_claimed, 0) - ?),
+             updated_at = datetime('now')
+         WHERE id = ?`
+      ).bind(claim.quantity || 1, regId).run();
+
+      return new Response(null, { status: 204 });
+    } catch {
+      return jsonError("Failed to revoke claim", 500);
     }
   }
 
@@ -374,6 +411,7 @@ export async function handleGifts(
           "price_range",
           "shop_url",
           "is_active",
+          "delivery_address",
         ];
         const fields: string[] = [];
         const vals: any[] = [];
@@ -422,38 +460,6 @@ export async function handleGifts(
       }
     }
 
-    // Revoke a specific claim
-    if (pathname.includes("/claims/") && method === "DELETE") {
-      try {
-        const parts = pathname.split("/");
-        const claimId = parts[parts.length - 1];
-        const regId = parts[parts.indexOf("registry") + 1];
-
-        // Get claim details before deleting (to update quantity_claimed)
-        const claim = await env.DB.prepare(
-          "SELECT * FROM gift_registry_claims WHERE id = ? AND registry_id = ?"
-        ).bind(claimId, regId).first<any>();
-
-        if (!claim) return jsonError("Claim not found", 404);
-
-        // Delete the claim
-        await env.DB.prepare(
-          "DELETE FROM gift_registry_claims WHERE id = ?"
-        ).bind(claimId).run();
-
-        // Update quantity_claimed on registry item
-        await env.DB.prepare(
-          `UPDATE gift_registry
-           SET quantity_claimed = MAX(0, COALESCE(quantity_claimed, 0) - ?),
-               updated_at = datetime('now')
-           WHERE id = ?`
-        ).bind(claim.quantity || 1, regId).run();
-
-        return new Response(null, { status: 204 });
-      } catch {
-        return jsonError("Failed to revoke claim", 500);
-      }
-    }
   }
 
   return jsonError("Not Found", 404);

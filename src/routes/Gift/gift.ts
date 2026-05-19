@@ -39,6 +39,32 @@ export async function handleGiftsRoutes(
     }
   }
 
+  // GET /api/gifts/registry/:id/address — public, return delivery address only
+  if (pathname.match(/^\/api\/gifts\/registry\/([^/]+)\/address$/) && method === "GET") {
+    try {
+      const registryId = pathname.split("/")[4];
+      const row = await env.DB.prepare(
+        "SELECT delivery_address FROM gift_registry WHERE id = ? AND deleted_at IS NULL AND is_active = 1"
+      ).bind(registryId).first<any>();
+
+      if (!row) return new Response(JSON.stringify({ error: "Not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+
+      return new Response(JSON.stringify({
+        delivery_address: row.delivery_address || null,
+      }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch {
+      return new Response(JSON.stringify({ error: "Failed to fetch address" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   // POST /api/gifts/registry/:id/claim — submit a claim
   const claimMatch = pathname.match(/^\/api\/gifts\/registry\/([^/]+)\/claim$/);
   if (claimMatch && method === "POST") {
@@ -107,6 +133,10 @@ export async function handleGiftsRoutes(
         .bind(registryId)
         .first()) as any;
 
+      const registryItem = await env.DB.prepare(
+        "SELECT delivery_address FROM gift_registry WHERE id = ?"
+      ).bind(registryId).first<any>();
+
       return res(
         {
           ok: true,
@@ -114,6 +144,7 @@ export async function handleGiftsRoutes(
           quantity_claimed:
             updated?.quantity_claimed ?? item.quantity_claimed + qty,
           quantity_needed: item.quantity_needed,
+          delivery_address: registryItem?.delivery_address || null,
         },
         201,
       );
