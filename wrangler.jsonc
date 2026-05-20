@@ -38,7 +38,10 @@
 			"id": "3009e3fd296a45699c0c2277be0aec50",
 			"preview_id": "7e0b399e25464a89ae250105caad0bf3"
 		}
-	]
+	],
+	"vars": {
+		"ALLOWED_ORIGINS": "https://benelin.my.id,https://www.benelin.my.id,http://localhost:5173,http://127.0.0.1:5173,https://wedding-cms-phi.vercel.app"
+	}
 	/**
 	 * Smart Placement
 	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

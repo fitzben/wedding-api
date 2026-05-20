@@ -20,6 +20,7 @@ export interface Env {
   R2_ACCOUNT_ID: string;
   R2_ACCESS_KEY_ID: string;
   R2_SECRET_ACCESS_KEY: string;
+  ALLOWED_ORIGINS?: string;
 }
 
 export default {
@@ -32,6 +33,7 @@ export default {
       return withCORS(
         withSecurityHeaders(new Response(null, { status: 200 })),
         request,
+        env.ALLOWED_ORIGINS,
       );
     }
 
@@ -66,6 +68,6 @@ export default {
       response = new Response("Not Found", { status: 404 });
     }
 
-    return withCORS(withSecurityHeaders(response), request);
+    return withCORS(withSecurityHeaders(response), request, env.ALLOWED_ORIGINS);
   },
 };
